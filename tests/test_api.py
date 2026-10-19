@@ -12,6 +12,7 @@ import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
@@ -246,6 +247,45 @@ class CollectorTests(unittest.TestCase):
         result = self.collector.run("auto")
         self.assertEqual(result["operation"], "full")
         self.assertEqual(self.client.operations[-1][0], "getChargerInfo")
+
+    def test_slow_status_pages_must_overlap_the_previous_confirmation(self):
+        self.full()
+        self.clock.advance(540)
+        self.client.add([])
+        self.client.add([row(stat="3")])
+        fetch_all = self.client.fetch_all
+
+        def delayed_fetch(operation, **parameters):
+            batch = fetch_all(operation, **parameters)
+            if operation == "getChargerStatus":
+                self.clock.advance(120)
+                return Batch(batch.items, batch.started_at, self.clock(), batch.total_count, batch.pages)
+            return batch
+
+        with patch.object(self.client, "fetch_all", side_effect=delayed_fetch):
+            result = self.collector.run("status")
+
+        self.assertEqual(result["operation"], "full-recovery")
+        self.assertEqual(self.client.operations[-1][0], "getChargerInfo")
+        self.assertEqual(self.region()["stations"][0]["chargers"][0]["status"], "3")
+
+    def test_malformed_status_does_not_renew_previous_available_charger(self):
+        malformed = (
+            {"statId": "TEST001", "chgerId": "02", "statUpdDt": "20261019090400"},
+            {"statId": "TEST001", "chgerId": "02", "stat": "3"},
+            {"statId": "TEST001", "chgerId": "02", "stat": "3", "statUpdDt": "invalid"},
+        )
+        for incoming in malformed:
+            with self.subTest(incoming=incoming):
+                self.full([row(stat="2", statUpdDt="20261019085900")])
+                before = (self.collector.output_dir / "manifest.json").read_bytes()
+                self.clock.advance(300)
+                self.client.add([incoming])
+                with self.assertRaises(CollectionError) as caught:
+                    self.collector.run("status")
+                self.assertEqual(caught.exception.code, "INVALID_STATUS")
+                self.assertEqual((self.collector.output_dir / "manifest.json").read_bytes(), before)
+                self.assertTrue(read_json(self.collector.state_path)["needsFullRefresh"])
 
     def test_failed_run_keeps_manifest_and_marks_recovery_needed(self):
         self.full()

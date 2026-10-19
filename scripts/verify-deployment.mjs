@@ -1,0 +1,51 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
+const rawUrl = process.env.DEPLOYMENT_URL || process.argv[2];
+if (!rawUrl) throw new Error('Set DEPLOYMENT_URL or provide the published app URL.');
+const base = new URL(rawUrl.endsWith('/') ? rawUrl : `${rawUrl}/`);
+if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash) {
+  throw new Error('Deployment URL must be a public HTTP(S) path without credentials or query parameters.');
+}
+const expectedRevision = process.env.EXPECTED_REVISION || '';
+const attempts = Number(process.env.DEPLOYMENT_CHECK_ATTEMPTS || 8);
+if (!Number.isInteger(attempts) || attempts < 1 || attempts > 12) throw new Error('Invalid retry count.');
+
+async function get(resource, json = false) {
+  const url = new URL(resource, base);
+  // Ask the CDN for the currently published release, not a cached previous build.
+  url.searchParams.set('verify', `${expectedRevision.slice(0, 12) || 'current'}-${Date.now()}`);
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { 'Cache-Control': 'no-cache' } });
+  if (!response.ok) throw new Error(`${resource}: HTTP ${response.status}`);
+  return json ? response.json() : response.text();
+}
+
+async function verify() {
+  const [html, build, manifest, app, css] = await Promise.all([
+    get('./'), get('build-info.json', true), get('data/manifest.json', true), get('js/app.js'), get('css/app.css')
+  ]);
+  if (!html.includes('id="appLayout"') || !html.includes('./js/app.js')) throw new Error('Published root is not the charging app.');
+  if (!build.sourceRevision) throw new Error('Published build has no source revision.');
+  if (expectedRevision && build.sourceRevision !== expectedRevision) throw new Error('Published revision does not match this workflow.');
+  if (!app.includes('new DataClient(') || !css.includes('.app-layout')) throw new Error('Published application assets are missing.');
+  if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Published data manifest is invalid.');
+  if (!['unconfigured', 'snapshot', 'live'].includes(manifest.mode) || build.dataMode !== manifest.mode) {
+    throw new Error('Published build and production data modes disagree.');
+  }
+  if (manifest.mode === 'unconfigured' && (manifest.totalStations !== 0 || manifest.totalChargers !== 0 || manifest.regions.length)) {
+    throw new Error('Unconfigured production must not contain example stations.');
+  }
+  if (manifest.mode === 'unconfigured') console.warn('Site is published; official data remains unconfigured.');
+  console.log(JSON.stringify({ url: base.href, sourceRevision: build.sourceRevision, dataMode: manifest.mode,
+    stations: manifest.totalStations, chargers: manifest.totalChargers, verifiedAt: new Date().toISOString() }));
+}
+
+for (let attempt = 1; attempt <= attempts; attempt++) {
+  try {
+    await verify();
+    break;
+  } catch (error) {
+    if (attempt === attempts) throw error;
+    console.warn(`Published app check ${attempt}/${attempts}: ${error.message}. Retrying after CDN propagation.`);
+    await delay(10_000);
+  }
+}

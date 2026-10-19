@@ -2,7 +2,7 @@
 
 [앱 열기](https://softm.github.io/evchargingstation/) · [화면 체험](https://softm.github.io/evchargingstation/?demo=1) · [소스](https://github.com/softm/evchargingstation)
 
-**2026-10-19 초기 검증:** 38개 자동 테스트와 앱 빌드·Pages 아티팩트 업로드를 확인했습니다. 당시 GitHub Actions·Pages 장애로 사이트 게시와 배포 화면 검증은 완료하지 못했습니다. [검증 결과와 남은 확인 사항](docs/VALIDATION.md)을 참고하세요.
+**2026-10-20 배포 재개 확인:** 앱과 체험 화면이 GitHub Pages에서 열리고 네이버 지도가 정상 표시되는 것을 확인했습니다. 공유 화면·상세창과 수집기 오류를 보완했으며 자동 테스트 41개가 통과했습니다. 실제 충전소 데이터는 인증키 등록을 기다리고 있습니다. [검증 결과와 남은 확인 사항](docs/VALIDATION.md)을 참고하세요.
 
 한국환경공단의 충전소·충전기 정보를 지도와 목록으로 확인하는 앱입니다. 사용자 소유 [돌봄한눈 소스](https://github.com/softm/homecare-nationwide-care-services-map)의 지도 동작과 작은 공통 모듈을 활용했습니다.
 
@@ -84,6 +84,9 @@ GitHub 예약 실행은 지연되거나 누락될 수 있습니다. 10분 이상
 npm run check
 npm test
 npm run build
+
+# 게시된 주소의 앱·자산·데이터 계약 확인
+npm run verify:deployment -- https://softm.github.io/evchargingstation/
 ```
 
 [API 명세와 가정](docs/API_NOTES.md), [소스 재사용 내역](docs/SOURCE_REUSE.md), [운영·배포 구조](docs/OPERATIONS.md)를 함께 확인합니다.

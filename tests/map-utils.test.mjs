@@ -3,11 +3,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildMarkerModels, containsCoordinate, createViewportGate, isCoordinate, markerHtml, normalizeBounds, selectMarkerModels } from '../public/js/map.js';
+import { buildMarkerModels, containsCoordinate, createViewportGate, isCoordinate, markerHtml, normalizeBounds, parseSharedView, selectMarkerModels } from '../public/js/map.js';
 
 test('좌표 미제공·빈 문자열·NaN을 실제 0도 위치로 바꾸지 않는다', () => {
-  for (const point of [null, {}, { lat: null, lng: null }, { lat: '', lng: '' }, { lat: '37.5', lng: '127' }, { lat: NaN, lng: 127 }, { lat: 91, lng: 127 }]) assert.equal(isCoordinate(point), false);
+  for (const point of [null, {}, { lat: null, lng: null }, { lat: '', lng: '' }, { lat: '37.5', lng: '127' }, { lat: NaN, lng: 127 }, { lat: 91, lng: 127 }, { lat: 0, lng: 0 }]) assert.equal(isCoordinate(point), false);
   assert.equal(isCoordinate({ lat: 37.5, lng: 127 }), true);
+});
+
+test('공유 지도는 좌표와 실제 지원 배율을 복원하고 빈 좌표를 0도로 해석하지 않는다', () => {
+  assert.deepEqual(parseSharedView(new URLSearchParams('lat=37.56&lng=126.98&z=13')), { center: { lat: 37.56, lng: 126.98 }, zoom: 13 });
+  for (const query of ['', 'lat=&lng=', 'lat=37.5', 'lat=NaN&lng=127', 'lat=91&lng=127', 'lat=0&lng=0']) assert.equal(parseSharedView(new URLSearchParams(query)), null, query);
+  for (const zoom of ['', 'no', '0', '100']) assert.equal(parseSharedView(new URLSearchParams(`lat=37.56&lng=126.98&z=${zoom}`)).zoom, 14);
+  for (const zoom of [6, 19]) assert.equal(parseSharedView(new URLSearchParams(`lat=37.56&lng=126.98&z=${zoom}`)).zoom, zoom);
 });
 
 test('좌표가 없는 목록 항목을 지도에서 제외해도 마커 번호는 원래 목록과 일치한다', () => {

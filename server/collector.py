@@ -253,13 +253,19 @@ class Collector:
     def _delta(self, old: dict[str, Any]) -> tuple[dict[str, Any], Batch]:
         batch = self.client.fetch_all("getChargerStatus", period=self.period)
         coverage = parse_iso(old.get("statusCoverageAt"))
-        if not coverage or batch.started_at - coverage > timedelta(minutes=self.period):
+        # Every page uses a moving relative window. The final page must still
+        # reach the previous coverage, even if the first page started in time.
+        if not coverage or batch.completed_at - coverage > timedelta(minutes=self.period):
             raise CollectionError("STATUS_GAP", "상태 변경을 조회할 수 있는 기간을 초과해 전체 재동기화가 필요합니다.")
         if batch.completed_at - batch.started_at >= timedelta(minutes=self.period):
             raise CollectionError("STATUS_GAP", "상태 페이지 수집 시간이 조회 범위를 초과해 전체 재동기화가 필요합니다.")
         rows = {key: dict(value) for key, value in old["rows"].items()}
         for incoming in batch.items:
             key = record_key(incoming)
+            if not text(incoming.get("stat")) or timestamp(incoming.get("statUpdDt")) is None:
+                # Missing fields cannot confirm the previous state as current.
+                # Unknown but present status codes remain valid and visible.
+                raise CollectionError("INVALID_STATUS", "상태 변경 응답에 상태 또는 유효한 변경 시각이 없어 기존 확인 시각을 유지합니다.")
             previous = rows.get(key)
             if previous is None:
                 # Status payloads have no location or connector type; recover a real inventory.

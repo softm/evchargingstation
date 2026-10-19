@@ -19,6 +19,8 @@ flowchart TD
 
 기본 배포는 정적 파일입니다. `public`에서 사이트를 빌드하고 `dist` 전체를 Pages 아티팩트로 배포합니다. Python 서버를 따로 운영할 때는 동일한 데이터 계약을 `/api`로 제공합니다. GitHub Pages에서 Python 코드를 실행하지 않습니다.
 
+게시 후 워크플로가 `npm run verify:deployment`를 실행합니다. 실제 공개 루트, 앱 JavaScript·CSS, `build-info.json`, `data/manifest.json`이 HTTP 200으로 열리는지 검사하고 게시된 소스 커밋이 해당 실행의 커밋과 일치해야 성공합니다. CDN 전파 지연은 제한된 횟수만 재확인합니다. 앱 게시 성공과 실제 데이터 미설정 상태는 별도로 출력하며, 미설정 기본 데이터에 예시 시설이 섞이면 실패합니다. Actions 상태 표시만으로 게시 완료를 판단하지 않습니다.
+
 ## 배포 경로
 
 | 항목 | 값 |

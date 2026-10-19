@@ -1,4 +1,4 @@
-import { createMap } from './map.js';
+import { createMap, parseSharedView } from './map.js';
 import { DataClient, selectViewportRegions } from './data.js';
 import { DEFAULT_FILTERS, chargerState, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, safePhone, sourceUrl } from './domain.js';
 
@@ -6,13 +6,15 @@ const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const icon = name => `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const params = new URLSearchParams(location.search);
+const sharedView = parseSharedView(params);
 const config = window.EV_CONFIG || {};
 const client = new DataClient(config);
 const demo = params.get('demo') === '1';
 const favoriteKey = demo ? 'evchargingstation:demo-favorites:v1' : 'evchargingstation:favorites:v1';
 const sharedFilters = { query: (params.get('q') || '').slice(0, 200), connector: ['combo', 'ac', 'nacs', 'chademo', 'ac3', 'combo2'].includes(params.get('connector')) ? params.get('connector') : '', minPower: [50, 100, 200, 300].includes(Number(params.get('kw'))) ? Number(params.get('kw')) : 0, available: params.get('available') === '1', unrestricted: params.get('public') === '1', freeParking: params.get('parking') === '1', sort: ['available', 'distance', 'name'].includes(params.get('sort')) ? params.get('sort') : 'available' };
-const state = { manifest: null, regions: new Map(), activeCodes: [], filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || 'auto', bounds: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
+const state = { manifest: null, regions: new Map(), activeCodes: [], filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || 'auto', bounds: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: sharedView?.center || { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
 let map = null;
+let preserveSelectedView = false;
 let toastTimer;
 let boundsTimer;
 let inputTimer;
@@ -31,6 +33,8 @@ function writeFavorites() {
 
 function toast(message) {
   clearTimeout(toastTimer);
+  // A modal dialog is in the browser's top layer; its feedback must be there too.
+  ($('stationDialog').open ? $('stationDialog') : document.body).append($('toast'));
   $('toast').textContent = message;
   $('toast').hidden = false;
   toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3400);
@@ -202,10 +206,14 @@ async function loadRegions(force = false) {
   render();
   if (state.sharedId) {
     const station = allStations().find(item => item.id === state.sharedId);
-    if (station) { state.sharedId = null; selectStation(station.id); }
+    if (station) { state.sharedId = null; selectStation(station.id, { preserveView: Boolean(sharedView) }); }
     else if (!failed && codes.length) { state.sharedId = null; toast('공유된 충전소를 이 지역에서 찾지 못했습니다.'); }
   }
-  if ($('stationDialog').open && state.selectedId) { const station = currentStation(); if (station) renderDetails(station); }
+  if ($('stationDialog').open && state.selectedId) {
+    const station = currentStation();
+    if (station) renderDetails(station);
+    else { closeDetails(); toast('갱신된 데이터에서 이 충전소를 찾을 수 없습니다. 목록을 다시 확인해 주세요.'); }
+  }
 }
 
 async function refresh() {
@@ -222,6 +230,7 @@ async function refresh() {
 }
 
 function resetFilters() {
+  clearTimeout(inputTimer);
   state.filters = { ...DEFAULT_FILTERS };
   state.listLimit = 60;
   render();
@@ -242,25 +251,34 @@ function favorite(id) {
   if (station && $('stationDialog').open) renderDetails(station);
 }
 
-function selectStation(id) {
+function selectStation(id, { preserveView = false } = {}) {
   const station = allStations().find(item => item.id === id);
   if (!station) return;
   state.navigationRevision++;
   state.selectedId = id;
+  preserveSelectedView = preserveView;
   render();
-  if (hasCoordinates(station)) map?.focus(station, { zoom: 16 });
+  if (hasCoordinates(station) && !preserveView) map?.focus(station, { zoom: 16 });
   renderDetails(station);
   if (!$('stationDialog').open) $('stationDialog').showModal();
 }
 
 function closeDetails() {
   $('stationDialog').close();
+  document.body.append($('toast'));
   state.selectedId = null;
+  preserveSelectedView = false;
   map?.setStations(state.visible, { selectedId: null, summaries: state.summaries });
   document.querySelector('.station-card.selected')?.classList.remove('selected');
 }
 
 function renderDetails(station) {
+  const dialog = $('stationDialog');
+  const content = $('detailContent');
+  const focused = content.contains(document.activeElement) ? document.activeElement : null;
+  const focusedAction = focused?.dataset.action;
+  const focusedHref = focused?.getAttribute('href');
+  const scrollTop = dialog.scrollTop;
   const region = stationRegion(station);
   const summary = summarizeStation(station, region, DEFAULT_FILTERS, Date.now(), threshold());
   const phone = safePhone(station.phone);
@@ -274,6 +292,13 @@ function renderDetails(station) {
     return `<div class="charger-row"><div class="charger-name">${esc(charger.id)}번 충전기 · ${esc(typeInfo(charger.type).name)}</div><span class="charger-status ${check.available ? 'available' : !check.fresh ? 'unknown' : ''}">${esc(check.label)}</span><div class="charger-meta">${Number.isFinite(charger.outputKw) ? `${esc(charger.outputKw)} kW` : '출력 미확인'}${charger.method ? ` · ${esc(charger.method)}` : ''}</div><div class="charger-times">상태 확인: <strong>${check.confirmedAt !== null ? formatTime(check.confirmedAt, true) : '확인 시각 없음'}</strong>${!check.fresh ? ` · 마지막 보고 ${esc(check.sourceLabel)}` : ''}<br>상태 변경: ${formatTime(charger.statusChangedAt, true)}${check.futureTimestamp ? '<br>일부 확인 시각이 현재보다 앞서 있어 신선도 판정에서 제외했습니다.' : ''}</div></div>`;
   }).join('');
   $('detailContent').innerHTML = `<div class="detail-top"><p class="detail-eyebrow">${demo ? 'DEMO · 가상 충전소' : 'CHARGING STATION'}</p><button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button><h2 id="detailTitle">${esc(station.name)}</h2><p class="detail-address">${esc(station.address || '주소 미확인')}${station.address ? `<button class="icon-button" type="button" data-action="copy-address" aria-label="주소 복사">${icon('copy')}</button>` : ''}${station.detailAddress ? `<br>${esc(station.detailAddress)}` : ''}</p><div class="detail-actions">${nav ? `<a class="button primary" href="${esc(naver)}" target="_blank" rel="noopener noreferrer">${icon('nav')}네이버 지도</a><a class="button" href="${esc(kakao)}" target="_blank" rel="noopener noreferrer">카카오 길찾기</a>` : `<button class="button" type="button" data-action="${demo ? 'demo-navigation' : 'missing-location'}">${icon('nav')}${demo ? '예시 위치' : '위치 미확인'}</button>`}<button class="button icon-only" type="button" data-action="detail-favorite" aria-label="${state.favorites.has(station.id) ? '저장 해제' : '충전소 저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button><button class="button icon-only" type="button" data-action="share" aria-label="충전소 공유">${icon('share')}</button></div></div>${demo ? '<div class="detail-demo"><strong>화면 체험용 가상 정보입니다.</strong><br>실제 충전소나 이용 가능한 충전 상태를 나타내지 않습니다.</div>' : ''}<section class="detail-section"><h3>충전기 현황</h3><div class="detail-stat"><div><span class="big-number">${summary.available}<small> / ${summary.total}기</small></span><p>${demo ? '예시 기준' : '최근 확인 기준'} 충전 대기</p></div>${icon('bolt')}</div><p class="detail-freshness">${Math.round(threshold() / 60)}분 이내 상태가 확인된 충전기만 충전 대기로 표시합니다.<br>커넥터 여러 개를 제공하는 충전기는 한 기로 계산합니다.${summary.stale ? `<br><strong>${summary.stale}기는 현재 상태를 다시 확인해야 합니다.</strong>` : ''}</p>${rows || '<p class="detail-freshness">등록된 충전기 정보가 없습니다.</p>'}</section><section class="detail-section"><h3>이용 안내</h3><dl class="detail-info"><dt>이용 시간</dt><dd>${esc(station.useTime || '운영 시간 미확인')}</dd><dt>설치 위치</dt><dd>${esc(station.location || '세부 위치 미확인')}</dd><dt>이용 제한</dt><dd${station.restricted !== false ? ' class="warning"' : ''}>${esc(restricted)}</dd><dt>주차</dt><dd>${esc(parking)}</dd><dt>충전 요금</dt><dd>운영사 요금 확인 필요</dd><dt>운영사</dt><dd>${esc(station.operatorName || '운영사 미확인')}</dd><dt>문의</dt><dd>${phone && !demo ? `<a href="tel:${esc(phone)}">${icon('phone')} ${esc(station.phone)}</a>` : '연락처 미확인'}</dd>${station.note ? `<dt>참고 사항</dt><dd>${esc(station.note)}</dd>` : ''}</dl></section><footer class="detail-foot"><p>${demo ? '가상 데이터 · 실제 이용 정보와 무관합니다.' : `출처: <a href="${esc(sourceUrl(state.manifest?.source?.url))}" target="_blank" rel="noopener noreferrer">한국환경공단 전기자동차 충전소 정보</a>`}</p><p>시설 정보 갱신: ${formatTime(region?.inventoryUpdatedAt, true)}<br>표시 시각은 한국 시간입니다.</p><p>대기 상태는 방문 시 달라질 수 있습니다. 이용 제한, 주차 요금과 충전 요금은 운영사 안내를 확인하세요.</p><span class="detail-id">충전소 ID ${esc(station.id)}</span></footer>`;
+  if (dialog.open) {
+    if (focusedAction || focusedHref) {
+      const replacement = [...content.querySelectorAll('button[data-action], a[href]')].find(element => focusedAction ? element.dataset.action === focusedAction : element.getAttribute('href') === focusedHref);
+      replacement?.focus({ preventScroll: true });
+    }
+    dialog.scrollTop = scrollTop;
+  }
 }
 
 async function copyText(text, success = '복사했습니다.') {
@@ -318,8 +343,9 @@ async function initializeMap() {
       state.center = map?.getCenter() || { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
       clearTimeout(boundsTimer); boundsTimer = setTimeout(() => state.region === 'auto' ? loadRegions() : render(), 350);
     }, onBackgroundClick: () => { if ($('stationDialog').open) closeDetails(); }, onError: error => { if (error?.recoverable) return; $('mapMessage').textContent = error?.message || '지도를 불러오지 못했습니다. 충전소 목록을 이용해 주세요.'; $('mapMessage').hidden = false; } });
-    const lat = Number(params.get('lat')), lng = Number(params.get('lng')), z = Number(params.get('z'));
-    if (params.has('lat') && params.has('lng') && hasCoordinates({ lat, lng })) { state.center = { lat, lng }; map.setCenter(state.center, Number.isFinite(z) && z >= 5 && z <= 20 ? z : 14); }
+    const selected = currentStation();
+    if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
+    else if (sharedView) map.setCenter(sharedView.center, sharedView.zoom);
     else if (demo) map.setCenter({ lat: 37.5658, lng: 126.979 }, 14);
     render();
   } catch (error) { $('mapMessage').textContent = '지도를 불러오지 못했습니다. 충전소 목록에서 정보를 확인할 수 있습니다.'; $('mapMessage').hidden = false; }
@@ -327,7 +353,7 @@ async function initializeMap() {
 
 function bindEvents() {
   $('searchForm').addEventListener('submit', event => { event.preventDefault(); clearTimeout(inputTimer); changeFilters({ query: $('searchInput').value }); });
-  $('searchInput').addEventListener('input', event => { const query = event.target.value; clearTimeout(inputTimer); inputTimer = setTimeout(() => changeFilters({ query }), 200); });
+  $('searchInput').addEventListener('input', event => { const query = event.target.value; state.filters.query = query; clearTimeout(inputTimer); inputTimer = setTimeout(() => changeFilters({ query }), 200); });
   $('clearSearch').addEventListener('click', () => { clearTimeout(inputTimer); changeFilters({ query: '' }); $('searchInput').focus(); });
   $('connectorSelect').addEventListener('change', event => changeFilters({ connector: event.target.value }));
   $('powerSelect').addEventListener('change', event => changeFilters({ minPower: Number(event.target.value) }));
@@ -358,9 +384,9 @@ function bindEvents() {
   $('stationDialog').addEventListener('click', async event => {
     if (event.target === $('stationDialog')) { const rect = $('stationDialog').getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDetails(); return; }
     const button = event.target.closest('[data-action]'); if (!button) return;
+    if (button.dataset.action === 'close') { closeDetails(); return; }
     const station = currentStation(); if (!station) return;
-    if (button.dataset.action === 'close') closeDetails();
-    else if (button.dataset.action === 'detail-favorite') favorite(station.id);
+    if (button.dataset.action === 'detail-favorite') favorite(station.id);
     else if (button.dataset.action === 'copy-address') await copyText(station.address, '주소를 복사했습니다.');
     else if (button.dataset.action === 'share') await shareStation(station);
     else if (button.dataset.action === 'demo-navigation') toast('실제 방문 장소가 없는 가상 예시입니다.');
@@ -388,8 +414,6 @@ function bindEvents() {
 
 bindEvents();
 setMode();
-const initialLat = Number(params.get('lat')), initialLng = Number(params.get('lng'));
-if (params.has('lat') && params.has('lng') && hasCoordinates({ lat: initialLat, lng: initialLng })) state.center = { lat: initialLat, lng: initialLng };
 await Promise.allSettled([initializeMap(), refresh()]);
 function startPolling() {
   clearInterval(refreshTimer);

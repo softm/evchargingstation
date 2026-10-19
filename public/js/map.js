@@ -16,7 +16,17 @@ let authHookInstalled = false;
 export function isCoordinate(point) {
   return point != null && typeof point.lat === 'number' && typeof point.lng === 'number'
     && Number.isFinite(point.lat) && Number.isFinite(point.lng)
-    && Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180;
+    && Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180
+    && !(point.lat === 0 && point.lng === 0);
+}
+
+export function parseSharedView(params) {
+  const latitude = params.get('lat'), longitude = params.get('lng');
+  if (!latitude?.trim() || !longitude?.trim()) return null;
+  const center = { lat: Number(latitude), lng: Number(longitude) };
+  if (!isCoordinate(center)) return null;
+  const zoom = Number(params.get('z'));
+  return { center, zoom: Number.isFinite(zoom) && zoom >= 6 && zoom <= 19 ? zoom : 14 };
 }
 
 export function normalizeBounds(bounds) {
