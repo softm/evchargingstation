@@ -1,0 +1,29 @@
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
+
+const root = fileURLToPath(new URL('../', import.meta.url));
+const output = path.join(root, 'dist');
+await rm(output, { recursive: true, force: true });
+await mkdir(output, { recursive: true });
+await cp(path.join(root, 'public'), output, { recursive: true, filter: p => !/\.(?:DS_Store|pyc)$/.test(p) });
+const context = { window: {} };
+vm.runInNewContext(await readFile(path.join(root, 'public/config.js'), 'utf8'), context);
+const config = { ...context.window.EV_CONFIG };
+const variables = { PUBLIC_NAVER_MAP_CLIENT_ID: 'naverMapClientId', PUBLIC_EV_API_BASE_URL: 'apiBaseUrl', PUBLIC_EV_DATA_BASE_URL: 'dataBaseUrl' };
+for (const [key, field] of Object.entries(variables)) {
+  // Blank Actions variables must preserve source defaults. Use DISABLE_NAVER_MAP=true to disable explicitly.
+  if (process.env[key]) config[field] = process.env[key];
+}
+if (process.env.DISABLE_NAVER_MAP === 'true') config.naverMapClientId = '';
+for (const key of ['apiBaseUrl', 'dataBaseUrl']) {
+  const value = config[key] || '';
+  if (/^(?:javascript|data):/i.test(value) || /[\r\n]/.test(value)) throw new Error(`Invalid public URL setting: ${key}`);
+  if (/servicekey|apikey|token=/i.test(value)) throw new Error(`Secret-like parameter in public URL setting: ${key}`);
+}
+await writeFile(path.join(output, 'config.js'), `/* Public settings only. */\nwindow.EV_CONFIG = Object.freeze(${JSON.stringify(config, null, 2)});\n`);
+const manifest = JSON.parse(await readFile(path.join(output, 'data/manifest.json'), 'utf8'));
+if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Invalid data manifest');
+await writeFile(path.join(output, 'build-info.json'), JSON.stringify({version:'0.1.0',builtAt:new Date().toISOString(),sourceRevision:process.env.GITHUB_SHA||null,dataMode:manifest.mode},null,2)+'\n');
+console.log(`Built dist/ — ${manifest.mode}, ${manifest.totalStations || 0} stations. No API secret is bundled.`);

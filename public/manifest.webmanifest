@@ -1,0 +1,1 @@
+{"id":"./","name":"충전한눈 · 전기차 충전소 찾기","short_name":"충전한눈","lang":"ko","description":"충전소 위치, 커넥터, 충전 출력과 확인 시각을 한눈에 확인하세요.","start_url":"./","scope":"./","display":"standalone","background_color":"#f8faf9","theme_color":"#087f64","icons":[{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}

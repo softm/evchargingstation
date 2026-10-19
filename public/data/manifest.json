@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mode": "unconfigured",
+  "generatedAt": null,
+  "inventoryUpdatedAt": null,
+  "statusCoverageAt": null,
+  "source": {"name": "한국환경공단", "url": "https://www.data.go.kr/data/15076352/openapi.do"},
+  "totalStations": 0,
+  "totalChargers": 0,
+  "freshnessThresholdSeconds": 600,
+  "regions": [],
+  "warnings": [{"code": "NOT_CONFIGURED", "message": "아직 충전소 데이터를 수집하지 않았습니다."}]
+}

@@ -1,0 +1,110 @@
+name: Collect and deploy EV charging stations
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      collection_mode:
+        description: 'Collection mode (auto, full, skip)'
+        type: choice
+        options: [auto, full, skip]
+        default: auto
+  schedule:
+    # Best-effort snapshots, not a real-time SLA. Disabled until explicitly configured.
+    - cron: '2-59/5 * * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: evchargingstation-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'schedule' || vars.ENABLE_SCHEDULED_COLLECTION == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Restore last complete dataset and request budget
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: |
+            .cache/evchargingstation
+            public/data
+          key: evchargingstation-data-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: evchargingstation-data-v1-
+      - name: Check collection configuration
+        id: configuration
+        env:
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          REQUESTED_MODE: ${{ inputs.collection_mode || 'auto' }}
+        run: |
+          if [ -n "$DATA_GO_KR_SERVICE_KEY" ] && [ "$REQUESTED_MODE" != 'skip' ]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            echo 'Collection skipped. Existing data and its original confirmation times are preserved.'
+          fi
+      - name: Collect official data
+        id: collect
+        if: steps.configuration.outputs.enabled == 'true'
+        continue-on-error: true
+        env:
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          REQUESTED_MODE: ${{ inputs.collection_mode || 'auto' }}
+          MAX_API_CALLS_PER_RUN: ${{ vars.MAX_API_CALLS_PER_RUN || '100' }}
+          MAX_API_CALLS_PER_DAY: ${{ vars.MAX_API_CALLS_PER_DAY || '1000' }}
+        run: python3 scripts/collect.py --mode "$REQUESTED_MODE" --output public/data --state-dir .cache/evchargingstation
+      - name: Preserve request budget and last complete dataset
+        if: always() && steps.configuration.outputs.enabled == 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: |
+            .cache/evchargingstation
+            public/data
+          key: evchargingstation-data-v1-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Data collection status
+        if: steps.collect.outcome == 'failure'
+        run: |
+          echo '::warning::Collection failed; last complete snapshot is retained. Its age is visible in the app.'
+          echo '### Data collection needs attention' >> "$GITHUB_STEP_SUMMARY"
+          echo 'The site will show the last complete snapshot and its original confirmation time. Check service authorization and quota.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Check app contracts
+        run: npm run check
+      - name: Test domain and collector
+        if: github.event_name != 'schedule'
+        run: npm test
+      - name: Build public application
+        env:
+          PUBLIC_NAVER_MAP_CLIENT_ID: ${{ vars.PUBLIC_NAVER_MAP_CLIENT_ID }}
+          PUBLIC_EV_API_BASE_URL: ${{ vars.PUBLIC_EV_API_BASE_URL }}
+          PUBLIC_EV_DATA_BASE_URL: ${{ vars.PUBLIC_EV_DATA_BASE_URL }}
+        run: npm run build
+      - uses: actions/configure-pages@v6.0.0
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: dist
+          retention-days: 1
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5.0.1
