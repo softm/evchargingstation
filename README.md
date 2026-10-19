@@ -2,6 +2,8 @@
 
 [앱 열기](https://softm.github.io/evchargingstation/) · [화면 체험](https://softm.github.io/evchargingstation/?demo=1) · [소스](https://github.com/softm/evchargingstation)
 
+**2026-10-19 초기 검증:** 38개 자동 테스트와 앱 빌드·Pages 아티팩트 업로드를 확인했습니다. 당시 GitHub Actions·Pages 장애로 사이트 게시와 배포 화면 검증은 완료하지 못했습니다. [검증 결과와 남은 확인 사항](docs/VALIDATION.md)을 참고하세요.
+
 한국환경공단의 충전소·충전기 정보를 지도와 목록으로 확인하는 앱입니다. 사용자 소유 [돌봄한눈 소스](https://github.com/softm/homecare-nationwide-care-services-map)의 지도 동작과 작은 공통 모듈을 활용했습니다.
 
 **초기 저장소는 실제 API 인증키가 연결되지 않은 상태입니다.** 기본 화면에 가상의 충전소를 넣지 않습니다. `?demo=1` 화면 체험은 모든 시설명이 `예시`로 표시되는 별도 가상 데이터이며 실제 위치 탐색·충전 판단 자료가 아닙니다. 실제 키 연결 전에는 API 성공, 전국 충전소 수, 운영 중 상태를 검증했다고 보지 않습니다.
