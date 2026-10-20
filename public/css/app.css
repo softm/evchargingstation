@@ -12,3 +12,6 @@
 .map-search-area .icon{width:16px;height:16px}
 .station-dialog::backdrop{background:transparent;backdrop-filter:none}
 @media(max-width:760px){.map-search-area{top:62px;min-height:39px;padding:8px 14px;font-size:12px}}
+
+/* Nonmodal dialog is not placed in the browser top layer. Keep it above map tools. */
+.station-dialog:open{z-index:1200}
