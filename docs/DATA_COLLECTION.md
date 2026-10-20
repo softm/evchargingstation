@@ -69,6 +69,8 @@ npm run verify:deployment -- https://softm.github.io/evchargingstation/
 
 배포 파일 `fees.json`에는 실제 이용단가라고 주장하지 않는 `reference`/사용허가 `licensed_publisher` 등의 출처 유형을 표시합니다. 충전기별 실거래가는 신용카드·로밍·프로모션에 따라 달라질 수 있습니다.
 
+> 2026-10-20 전국 재수집 트리거: 이번 커밋 메시지의 `[collect:full]` 플래그는 최신 수집 코드로 전국 충전소·충전기를 다시 검증하고 지역별 GZIP 파일을 재생성하도록 지시합니다. 이전 자료와 API 호출량 기록은 중단·실패 시 보존합니다.
+
 ## 5. 검증 완료 기준
 
 1. API 전체 페이지에서 정합성 확인, `totalStations` 및 `totalChargers`와 16개 지역 합계 일치.

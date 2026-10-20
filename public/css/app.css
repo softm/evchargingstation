@@ -28,3 +28,16 @@
 .cost-fields label{display:flex;flex-direction:column;gap:6px;font-size:11px;color:#60786a}
 .cost-fields input{width:100%;min-width:0;min-height:42px;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;color:#294c3a;background:#fff}
 .cost-result{display:block;margin-top:12px;border-radius:8px;background:#edf7f1;padding:12px;font-size:12px;color:var(--green);font-weight:650;overflow-wrap:anywhere}
+/* Five official charger-state categories, using freshness-aware map summaries. */
+.map-legend{flex-wrap:wrap;max-width:calc(100% - 30px);row-gap:7px}
+.legend-dot.available{background:#12a47b}.legend-dot.charging{background:#5f80fb}
+.legend-dot.unavailable{background:#f15555}.legend-dot.unknown{background:#f3a025}
+.legend-dot.restricted{background:#778091}
+.power-legend{position:absolute;z-index:450;bottom:85px;left:25px;max-width:calc(100% - 50px);display:flex;gap:11px;align-items:center;flex-wrap:wrap;padding:9px 12px;border:1px solid #e2eae4;border-radius:9px;background:#ffffffef;box-shadow:var(--shadow);font-size:10px;color:#5b7062;pointer-events:none}
+.power-legend strong{color:#34483b}.power-band{font-size:10px;font-weight:650;border-radius:5px;padding:3px 6px;background:#f2f5f8}
+.power-band.band-slow,.power-legend .band-slow{color:#65b982}
+.power-band.band-medium,.power-legend .band-medium{color:#00ade6}
+.power-band.band-fast,.power-legend .band-fast{color:#155fe0}
+.power-band.band-fastPlus,.power-legend .band-fastPlus{color:#f6a218}
+.power-band.band-ultra,.power-legend .band-ultra{color:#ed5b57}
+@media(max-width:760px){.map-legend{bottom:17px;gap:7px;padding:7px;font-size:9px}.power-legend{bottom:78px;left:13px;max-width:calc(100% - 26px);gap:6px;padding:6px 8px;font-size:9px}}

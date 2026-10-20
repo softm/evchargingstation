@@ -76,7 +76,7 @@ export function buildMarkerModels(stations, { selectedId, summaries = new Map() 
     const total = nonNegativeCount(summary?.total);
     const available = nonNegativeCount(summary?.available);
     const confirmed = total != null && available != null && available <= total;
-    const tone = confirmed && summary?.tone === 'available' && available > 0 ? 'available' : summary?.tone === 'busy' ? 'busy' : 'unknown';
+    const tone = confirmed && ['available', 'charging', 'unavailable', 'unknown', 'restricted'].includes(summary?.tone) ? summary.tone : 'unknown';
     const label = String(summary?.label || '상태 미확인');
     return [{ id, station, number: index + 1, selected: String(selectedId ?? '') === id, tone,
       count: total !== null ? `${total}기` : '—', label }];
@@ -130,8 +130,8 @@ export function selectMarkerModels(stations, bounds, { selectedId, summaries = n
 /** SOFTM-EV-MARKER-CULL END */
 
 export function markerHtml(model) {
-  const description = `${model.number}. ${model.station.name || '이름 미제공 충전소'}. ${model.label}`;
-  return `<button type="button" class="ev-map-pin ev-map-pin--${model.tone}${model.selected ? ' is-selected' : ''}" data-station-id="${escapeHtml(model.id)}" aria-label="${escapeHtml(description)}" aria-pressed="${model.selected}" title="${escapeHtml(description)}"><span class="ev-map-pin-number">${model.number}</span><span class="ev-map-pin-count" aria-hidden="true">${escapeHtml(model.count)}</span><span class="ev-map-pin-label" aria-hidden="true" hidden>${escapeHtml(model.station.name || '이름 미제공 충전소')}</span></button>`;
+  const description = `${model.station.name || '이름 미제공 충전소'}. ${model.label}. 총 ${model.count}`;
+  return `<button type="button" class="ev-map-pin ev-map-pin--${model.tone}${model.selected ? ' is-selected' : ''}" data-station-id="${escapeHtml(model.id)}" aria-label="${escapeHtml(description)}" aria-pressed="${model.selected}" title="${escapeHtml(description)}"><span class="ev-map-pin-count" aria-hidden="true">${escapeHtml(model.count)}</span><span class="ev-map-pin-label" aria-hidden="true" hidden>${escapeHtml(model.station.name || '이름 미제공 충전소')}</span></button>`;
 }
 
 function mapError(code, message, recoverable = true) {
@@ -211,15 +211,16 @@ function installStyles() {
     .ev-map-tools button:hover{background:#f1f7f4}.ev-map-tools button:focus-visible,.ev-map-pin:focus-visible{outline:3px solid #1590df;outline-offset:3px}
     .ev-leaflet-icon{background:transparent;border:0}.ev-map-pin{position:relative;display:flex;align-items:center;gap:5px;min-width:64px;height:40px;padding:4px 7px 4px 4px;overflow:visible;border:2px solid white;border-radius:22px;background:#718078;color:white;box-shadow:0 2px 5px #123a2840;cursor:pointer;font:700 12px/1.2 system-ui,sans-serif;white-space:nowrap}
     .ev-map-pin:after{content:"";position:absolute;bottom:-6px;left:calc(50% - 5px);width:8px;height:8px;background:inherit;border-right:2px solid white;border-bottom:2px solid white;transform:rotate(45deg)}
-    .ev-map-pin--available{background:#078769}.ev-map-pin--busy{background:#b96b29}.ev-map-pin--unknown{background:#67796f}
-    .ev-map-pin-number{display:grid;place-items:center;flex:none;min-width:25px;height:25px;border-radius:50%;background:white;color:#143e30;font-size:12px}
+    .ev-map-pin--available{background:#13a67c}.ev-map-pin--charging{background:#5982fc}.ev-map-pin--unavailable{background:#f15c5c}.ev-map-pin--unknown{background:#f4a22a}.ev-map-pin--restricted{background:#757e90}
+    .ev-map-pin-number{display:none}
     .ev-map-pin-count{font-size:12px;letter-spacing:-.2px}.ev-map-pin.is-selected{outline:3px solid #164937;outline-offset:2px;box-shadow:0 0 0 7px #ffffffc9,0 5px 16px #163f3040}
     .ev-map-pin-label{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);max-width:220px;padding:6px 9px;overflow:hidden;text-overflow:ellipsis;border:1px solid #dce7e1;border-radius:8px;background:#fffffff5;color:#1b3b2c;font:600 12px/1.35 system-ui,sans-serif;box-shadow:0 2px 8px #153e2814;pointer-events:none}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected){width:15px;min-width:15px;height:15px;min-height:15px;padding:0;gap:0;border-width:2px;border-radius:50%}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected)::after{display:none}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-number,.ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){min-width:42px;padding-right:5px;gap:0}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){width:24px;min-width:24px;height:24px;min-height:24px;padding:0;gap:0;border-radius:50%}
+    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected){width:28px;min-width:28px;height:28px;min-height:28px;padding:0;gap:0;border-radius:50%}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}\n    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
     .ev-map-pin.is-selected .ev-map-pin-label{max-width:240px;font-size:14px;font-weight:800;border:2px solid #087f64;background:#effcf6;color:#075842;padding:8px 11px}
     .ev-map-pin-label[hidden]{display:none}.ev-map-current{width:18px;height:18px;border:3px solid white;border-radius:50%;background:#287de0;box-shadow:0 0 0 7px #287de025,0 2px 5px #14366244}
     .ev-map-failure{position:absolute;inset:0;display:grid;place-content:center;gap:10px;padding:24px;text-align:center;color:#324c40;font:500 14px/1.6 system-ui;background:#f2f6f3}
@@ -396,7 +397,8 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
   function draw() {
     if (!engine || destroyed) return;
     host.dataset.markerScale = markerScale(engine.getZoom());
-    const view = selectMarkerModels(rows, engine.getBounds(), { selectedId: selection, summaries });
+    const zoom = engine.getZoom();
+    const view = selectMarkerModels(rows, engine.getBounds(), { selectedId: selection, summaries, limit: zoom < 11 ? 160 : zoom < 14 ? 380 : 800 });
     const models = view.models;
     densityMessage = view.limited ? `지도 ${models.length.toLocaleString()}곳 표시 · 확대하면 더 자세히 볼 수 있습니다` : '';
     if (tileErrors < 3) note.textContent = providerNote();

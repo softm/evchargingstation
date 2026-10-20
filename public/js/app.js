@@ -1,8 +1,8 @@
 import { createMap, parseSharedView } from './map.js';
 import { DataClient, selectViewportRegions } from './data.js';
-import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpen24, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, safePhone, sourceUrl } from './domain.js';
+import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpen24, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl, powerBand, POWER_BANDS } from './domain.js';
 import { compareStations, nearbyAlternatives, estimateChargingCost } from './discovery.js';
-import { chargerFee, summarizeFees, feeLabel, facilityName } from './fees.js';
+import { chargerFee, summarizeFees, feeLabel, facilityName, facilityDetailName } from './fees.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -32,6 +32,57 @@ function fillOperators(stations) {
   if ($('operatorSelect').innerHTML !== html) $('operatorSelect').innerHTML = html;
   $('operatorSelect').value = state.filters.operator;
 }
+let appliedBounds = null;
+let initialLocation = null;
+let locationFailure = '';
+let locationRequest = null;
+let initialBoundsConsumed = false;
+
+/** Handle hidden/zero-size maps and asynchronous SDK centering at startup. */
+function initialVisibleBounds(center, sdkBounds, zoom = 14) {
+  if (hasCoordinates(center) && sdkBounds
+    && ['south', 'north', 'west', 'east'].every(key => Number.isFinite(sdkBounds[key]))
+    && sdkBounds.north > sdkBounds.south + 0.0005
+    && sdkBounds.east > sdkBounds.west + 0.0005
+    && center.lat >= sdkBounds.south && center.lat <= sdkBounds.north
+    && center.lng >= sdkBounds.west && center.lng <= sdkBounds.east) return sdkBounds;
+  const radius = zoom >= 16 ? 0.03 : zoom >= 14 ? 0.065 : 0.16;
+  return { south: center.lat - radius, north: center.lat + radius,
+    west: center.lng - radius * 1.5, east: center.lng + radius * 1.5 };
+}
+
+function requestLocation() {
+  if (locationRequest) return locationRequest;
+  if (typeof isSecureContext !== 'undefined' && !isSecureContext || !navigator.geolocation) return Promise.reject(new Error('브라우저 위치 기능을 사용할 수 없습니다. 지역을 직접 선택해 주세요.'));
+  locationRequest = new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(position => {
+      const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+      if (hasCoordinates(point)) resolve(point);
+      else reject(new Error('현재 위치 좌표가 올바르지 않습니다.'));
+    }, error => reject(new Error(error.code === 1
+      ? '위치 권한이 차단되어 있습니다. 브라우저의 사이트 위치 권한을 허용하거나 지역을 선택해 주세요.'
+      : error.code === 3 ? '위치 확인이 지연됩니다. 내 위치 버튼으로 재시도하거나 지역을 선택해 주세요.'
+      : '위치를 확인할 수 없습니다. 내 위치 버튼으로 재시도하거나 지역을 선택해 주세요.')),
+    { enableHighAccuracy: false, timeout: 11000, maximumAge: 60000 });
+  }).finally(() => { locationRequest = null; });
+  return locationRequest;
+}
+
+async function initialGeolocation() {
+  if (demo || sharedView || state.sharedId || state.region !== 'auto') return;
+  try {
+    const permission = await navigator.permissions?.query?.({ name: 'geolocation' }).catch(() => null);
+    if (permission?.state === 'denied') {
+      locationFailure = '위치 권한이 차단되어 있습니다. 내 위치 버튼 또는 지역 선택을 이용하세요.';
+      return;
+    }
+    const point = await requestLocation();
+    initialLocation = point;
+    state.center = point;
+    locationFailure = '';
+  } catch (error) { locationFailure = error.message || '위치 확인에 실패했습니다. 지역을 선택해 주세요.'; }
+}
+
 
 function updateMapSearchButton() {
   const button = $('searchThisArea');
@@ -114,9 +165,9 @@ function setMode() {
 
 function scopeLabel() {
   const names = (state.manifest?.regions || []).filter(entry => state.activeCodes.includes(String(entry.code))).map(entry => entry.name);
-  if (demo) return '서울 · 화면 체험용 가상 충전소';
+  if (demo) return '지도 화면 안 · 화면 체험용 가상 충전소';
   if (!names.length) return state.manifest?.mode === 'unconfigured' ? '실제 데이터 연결 후 검색할 수 있습니다' : '선택한 지역 안에서 검색합니다';
-  return `${names.join(' · ')}${state.region === 'auto' ? ' · 지도 주변 지역' : ' 전체'} 안에서 검색${state.filters.favorites ? ' · 저장한 충전소' : ''}`;
+  return state.region === 'auto' ? `지도 화면 안 검색 · ${names.join(' · ')}${state.filters.favorites ? ' · 저장한 충전소' : ''}` : `${names.join(' · ')} 전체${state.filters.favorites ? ' · 저장한 충전소' : ''}`;
 }
 
 function emptyHTML() {
@@ -136,17 +187,23 @@ function stationCard(station, index) {
   const mostRecent = confirmed.length ? Math.max(...confirmed) : null;
   const dist = distanceKm(state.center, station);
   const connectorNames = [...new Set((station.chargers || []).map(charger => typeInfo(charger.type).name))];
+  const bands = [...new Set((station.chargers || []).map(charger => powerBand(charger.outputKw)).filter(Boolean))];
   const connectors = connectorNames.length > 2 ? `${connectorNames.slice(0, 2).join(' · ')} 외` : connectorNames.join(' · ');
   const availability = summary.available > 0 ? `<b>${summary.available}</b>기 충전 대기 <small>/ ${summary.matching}기${summary.matching !== summary.total ? ' 조건 일치' : ''}</small>` : summary.unknown ? '현재 상태 확인 필요' : '충전 대기 없음';
-  return `<article class="station-card${state.selectedId === station.id ? ' selected' : ''}" data-station-id="${esc(station.id)}" data-tone="${summary.tone}"><span class="station-number" aria-hidden="true">${index + 1}</span><div class="station-main"><button type="button" class="station-name" data-action="select" data-id="${esc(station.id)}">${esc(station.name)}</button><p class="station-address">${esc(station.address || '주소 미확인')}</p><div class="card-status-row"><span class="availability ${summary.tone}">${availability}</span><span class="card-distance">${Number.isFinite(dist) ? `${dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`}` : '위치 미확인'}</span></div><div class="card-tags"><span>총 ${summary.total}기</span>${station.operatorName ? `<span>${esc(station.operatorName)}</span>` : ''}${isOpen24(station) ? '<span>24시간</span>' : ''}${summary.maxPower ? `<span class="power-tag">최대 ${esc(summary.maxPower)} kW</span>` : ''}<span>${esc(connectors || '커넥터 미확인')}</span>${station.restricted === true ? '<span class="warning-tag">이용 제한</span>' : ''}${station.parkingFree === true ? '<span>주차 무료 등록</span>' : ''}${summary.hasBusOnly ? '<span class="warning-tag">버스 전용 포함</span>' : ''}</div><p class="card-update">${demo ? '가상 예시 · ' : ''}${relativeTime(mostRecent)}${summary.stale && confirmed.length ? ' · 일부 충전기 확인 지연' : ''}</p></div><button type="button" class="card-save" data-action="favorite" data-id="${esc(station.id)}" aria-label="${esc(station.name)} ${state.favorites.has(station.id) ? '저장 해제' : '저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button></article>`;
+  return `<article class="station-card${state.selectedId === station.id ? ' selected' : ''}" data-station-id="${esc(station.id)}" data-tone="${summary.tone}"><span class="station-number" aria-hidden="true">${index + 1}</span><div class="station-main"><button type="button" class="station-name" data-action="select" data-id="${esc(station.id)}">${esc(station.name)}</button><p class="station-address">${esc(station.address || '주소 미확인')}</p><div class="card-status-row"><span class="availability ${summary.tone}">${availability}</span><span class="card-distance">${Number.isFinite(dist) ? `${dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`}` : '위치 미확인'}</span></div><div class="card-tags"><span>총 ${summary.total}기</span>${station.operatorName ? `<span>${esc(station.operatorName)}</span>` : ''}${isOpen24(station) ? '<span>24시간</span>' : ''}${summary.maxPower ? `<span class="power-tag">최대 ${esc(summary.maxPower)} kW</span>` : ''}<span>${esc(connectors || '커넥터 미확인')}</span>${station.restricted === true ? '<span class="warning-tag">이용 제한</span>' : ''}${station.parkingFree === true ? '<span>주차 무료 등록</span>' : ''}${bands.map(band => `<span class="power-band band-${band}">${esc(POWER_BANDS[band])}</span>`).join('')}${summary.hasBusOnly ? '<span class="warning-tag">버스 전용 포함</span>' : ''}</div><p class="card-update">${demo ? '가상 예시 · ' : ''}${relativeTime(mostRecent)}${summary.stale && confirmed.length ? ' · 일부 충전기 확인 지연' : ''}</p></div><button type="button" class="card-save" data-action="favorite" data-id="${esc(station.id)}" aria-label="${esc(station.name)} ${state.favorites.has(station.id) ? '저장 해제' : '저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button></article>`;
 }
 
 function render() {
   const stations = allStations();
-  fillOperators(stations);
+  // Screen-wide province snapshots can contain tens of thousands of records.
+  // Narrow to the applied viewport before per-charger summarization and sorting.
+  const scopedStations = state.region === 'auto' && appliedBounds
+    ? stations.filter(station => insideMapBounds(station, appliedBounds))
+    : stations;
+  fillOperators(scopedStations);
   const now = Date.now();
-  state.summaries = new Map(stations.map(station => [station.id, summarizeStation(station, stationRegion(station), state.filters, now, threshold())]));
-  state.visible = filterStations(stations, state.regions, state.filters, state.favorites, now, threshold());
+  state.summaries = new Map(scopedStations.map(station => [station.id, summarizeStation(station, stationRegion(station), state.filters, now, threshold())]));
+  state.visible = filterStations(scopedStations, state.regions, state.filters, state.favorites, now, threshold());
   state.visible.sort((a,b) => compareStations(a,b,state.filters.sort,state.summaries,state.center));
   $('resultCount').textContent = state.manifest ? state.visible.length.toLocaleString('ko-KR') : '—';
   $('scopeLabel').textContent = scopeLabel();
@@ -155,7 +212,7 @@ function render() {
   const warningCodes = new Set((state.manifest?.warnings || []).map(item => item.code));
   const knownWarnings = new Set(['NOT_CONFIGURED', 'UNCONFIGURED', 'INITIALIZING', 'INVALID_COORDINATES']);
   const collectionFailed = [...warningCodes].some(code => !knownWarnings.has(code));
-  const warnings = [warningCodes.has('INITIALIZING') && stations.length ? '최신 충전소 정보를 수집하고 있습니다.' : '', warningCodes.has('INVALID_COORDINATES') ? '위치 정보가 없는 충전소는 목록에서 확인할 수 있습니다.' : '', collectionFailed ? '데이터 갱신이 지연되고 있습니다. 마지막으로 확인된 정보와 확인 시각을 확인해 주세요.' : ''].filter(Boolean);
+  const warnings = [locationFailure, warningCodes.has('INITIALIZING') && stations.length ? '최신 충전소 정보를 수집하고 있습니다.' : '', warningCodes.has('INVALID_COORDINATES') ? '위치 정보가 없는 충전소는 목록에서 확인할 수 있습니다.' : '', collectionFailed ? '데이터 갱신이 지연되고 있습니다. 마지막으로 확인된 정보와 확인 시각을 확인해 주세요.' : ''].filter(Boolean);
   const issue = [state.partialError, state.error && stations.length ? `${state.error} 마지막으로 확인한 정보를 표시합니다.` : '', ...warnings].filter(Boolean).join(' ');
   $('resultNotice').textContent = issue;
   $('resultNotice').hidden = !issue;
@@ -179,7 +236,7 @@ function fillRegions() {
 function regionEntries() {
   const entries = state.manifest?.regions || [];
   if (state.region !== 'auto') return entries.filter(region => String(region.code) === state.region);
-  const bounds = state.bounds || { south: state.center.lat - .05, north: state.center.lat + .05, west: state.center.lng - .08, east: state.center.lng + .08 };
+  const bounds = appliedBounds || state.bounds || { south: state.center.lat - .05, north: state.center.lat + .05, west: state.center.lng - .08, east: state.center.lng + .08 };
   return selectViewportRegions(entries, bounds, 4);
 }
 
@@ -355,7 +412,7 @@ function renderDetails(station) {
     ? `회원 참고요금 ${esc(feeLabel(memberFee))}${guestFee ? ` / 비회원 ${esc(feeLabel(guestFee))}` : ''} <small>(원/kWh, 출력·요금제에 따라 차이)</small><a href="${priceSource}" target="_blank" rel="noopener noreferrer">공식 요금 안내</a>`
     : `요금 미확인 · <a href="${priceSource}" target="_blank" rel="noopener noreferrer">공식 사업자 요금표 확인</a>`;
   const facilityText = station.facilityKind
-    ? `${esc(facilityName(station))}${station.facilityDetailCode ? ` · 상세코드 ${esc(station.facilityDetailCode)}` : ''}`
+    ? `${esc(facilityName(station))}${station.facilityDetailCode ? ` · ${esc(facilityDetailName(station))}` : ''}`
     : '시설 유형 미확인';
   const floors = [station.floorTypes, station.floorNumbers].filter(Boolean).map(esc).join(' · ') || '설치 층수 미등록';
   const convenience = station.convenienceProvided === true ? '편의제공 있음으로 등록 (종류 미확인)' : station.convenienceProvided === false ? '편의제공 없음으로 등록' : '편의제공 여부 미확인';
@@ -420,6 +477,18 @@ function setMobileView(view) {
 async function initializeMap() {
   try {
     map = await createMap({ container: $('map'), config, onSelect: id => selectStation(String(id), { origin: 'map' }), onBoundsChange: bounds => {
+      // The first idle event finishes SDK centering of the consented location.
+      // Keep the applied search region in sync before enabling manual searches.
+      if (!initialBoundsConsumed) {
+        initialBoundsConsumed = true;
+        state.bounds = bounds;
+        appliedBounds = bounds;
+        state.center = map?.getCenter() || state.center;
+        mapSearchPending = false;
+        updateMapSearchButton();
+        if (state.manifest) render();
+        return;
+      }
       state.navigationRevision++;
       state.bounds = bounds;
       state.center = map?.getCenter() || { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
@@ -433,6 +502,15 @@ async function initializeMap() {
     if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
     else if (sharedView) map.setCenter(sharedView.center, sharedView.zoom);
     else if (demo) map.setCenter({ lat: 37.5658, lng: 126.979 }, 14);
+    else if (initialLocation) map.locate(initialLocation);
+    else if (!selected && !sharedView && !demo) map.setCenter(state.center, 14);
+    // Some SDKs report the previous (Seoul) bounds while moving to a newly
+    // acquired user position. Never use those bounds for the first data load.
+    const requestedCenter = initialLocation || sharedView?.center || map.getCenter() || state.center;
+    appliedBounds = initialVisibleBounds(requestedCenter, map.getBounds(), initialLocation ? 15 : map.getZoom());
+    state.bounds = appliedBounds;
+    state.center = requestedCenter;
+    mapSearchPending = false;
     render();
   } catch (error) { $('mapMessage').textContent = '지도를 불러오지 못했습니다. 충전소 목록에서 정보를 확인할 수 있습니다.'; $('mapMessage').hidden = false; }
 }
@@ -458,6 +536,9 @@ function bindEvents() {
     if (state.loading || !state.bounds) return;
     clearTimeout(boundsTimer);
     mapSearchPending = false;
+    appliedBounds = map?.getBounds?.() || state.bounds;
+    state.bounds = appliedBounds;
+    state.center = map?.getCenter?.() || state.center;
     state.region = 'auto';
     $('regionSelect').value = 'auto';
     state.sharedId = null;
@@ -470,6 +551,7 @@ function bindEvents() {
     state.navigationRevision++;
     state.region = event.target.value; state.sharedId = null; state.listLimit = 60;
     mapSearchPending = false;
+    appliedBounds = null;
     updateMapSearchButton();
     const entry = state.manifest?.regions.find(region => String(region.code) === state.region);
     if (entry?.bounds) { const bounds = entry.bounds; state.center = { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 }; map?.setCenter(state.center, 10); }
@@ -492,6 +574,14 @@ function bindEvents() {
       clearTimeout(inputTimer);
       state.filters = {...state.filters,query:'',favorites:false};
       state.listLimit = 60;
+      const target = allStations().find(item => String(item.id) === button.dataset.id);
+      if (state.region === 'auto' && target && hasCoordinates(target)) {
+        appliedBounds = initialVisibleBounds(target, null, Math.max(16, map?.getZoom?.() || 16));
+        state.bounds = appliedBounds;
+        state.center = {lat:target.lat,lng:target.lng};
+        mapSearchPending = false;
+        updateMapSearchButton();
+      }
       selectStation(button.dataset.id);
       $('stationDialog').scrollTop = 0;
       return;
@@ -507,20 +597,26 @@ function bindEvents() {
   $('stationDialog').addEventListener('cancel', event => { event.preventDefault(); closeDetails(); });
   $('mapTab').addEventListener('click', () => setMobileView('map'));
   $('listTab').addEventListener('click', () => setMobileView('list'));
-  $('locateButton').addEventListener('click', () => {
-    if (!navigator.geolocation) { toast('이 브라우저에서는 위치 확인을 지원하지 않습니다.'); return; }
+  $('locateButton').addEventListener('click', async () => {
+    const revision = ++state.navigationRevision;
     $('locateButton').disabled = true;
-    const requestedRevision = ++state.navigationRevision;
-    navigator.geolocation.getCurrentPosition(position => {
-      $('locateButton').disabled = false;
-      if (requestedRevision !== state.navigationRevision) return;
-      state.center = { lat: position.coords.latitude, lng: position.coords.longitude };
-      state.region = 'auto'; $('regionSelect').value = 'auto'; map?.locate(state.center);
-      mapSearchPending = true;
-      updateMapSearchButton();
-      if (!map) { state.bounds = null; loadRegions(); }
-      toast('내 위치 주변의 충전소를 조회합니다.');
-    }, error => { $('locateButton').disabled = false; if (requestedRevision !== state.navigationRevision) return; toast(error.code === 1 ? '위치 권한을 허용하거나 지역을 직접 선택해 주세요.' : '현재 위치를 확인하지 못했습니다. 지역을 직접 선택해 주세요.'); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+    try {
+      const point = await requestLocation();
+      if (revision !== state.navigationRevision) return;
+      state.center = point;
+      state.region = 'auto';
+      $('regionSelect').value = 'auto';
+      map?.locate(point);
+      appliedBounds = initialVisibleBounds(point, map?.getBounds(), map?.getZoom());
+      state.bounds = appliedBounds;
+      state.listLimit = 60;
+      mapSearchPending = false;
+      locationFailure = '';
+      await loadRegions();
+      toast('내 위치 주변 충전소를 조회했습니다.');
+    } catch (error) {
+      if (revision === state.navigationRevision) toast(error.message);
+    } finally { $('locateButton').disabled = false; updateMapSearchButton(); }
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !demo) refresh(); });
   window.addEventListener('storage', event => { if (event.key === favoriteKey) { state.favorites = readFavorites(); render(); } });
@@ -528,7 +624,12 @@ function bindEvents() {
 
 bindEvents();
 setMode();
-await Promise.allSettled([initializeMap(), refresh()]);
+// On mobile the default list tab hides the SDK canvas (zero geometry).
+// Show the map before creating it, as in the care-map mobile flow.
+if (window.matchMedia?.('(max-width:760px)').matches) setMobileView('map');
+await initialGeolocation();
+await initializeMap();
+await refresh();
 function startPolling() {
   clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (document.hidden) return; if (!demo) refresh(); else { render(); const station = currentStation(); if (station && $('stationDialog').open) renderDetails(station); } }, 60000);

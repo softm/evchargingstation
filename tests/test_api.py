@@ -235,6 +235,43 @@ class ResponseTests(unittest.TestCase):
         self.assertEqual(result.pages, 2)
 
 
+class ParallelInventoryTests(unittest.TestCase):
+    def test_parallel_full_pages_are_complete_and_budget_is_atomic(self):
+        class PagedOpener:
+            def __init__(self):
+                self.seen = []
+
+            def __call__(self, request, timeout):
+                number = int(parse_qs(urlsplit(request.full_url).query)["pageNo"][0])
+                self.seen.append(number)
+                start = (number - 1) * 10
+                items = [row(station=f"PARALLEL{i:03d}") for i in range(start, min(start + 10, 23))]
+                return io.BytesIO(payload(items, total=23, page=number))
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory) / "api-budget.json"
+            opener = PagedOpener()
+            budget = CallBudget(per_run=10, per_day=10, ledger=ledger, clock=Clock())
+            client = OpenDataClient("TESTKEY", opener=opener, page_size=10,
+                                    inventory_workers=3, budget=budget, clock=Clock())
+            batch = client.fetch_all("getChargerInfo")
+            self.assertEqual(batch.pages, 3)
+            self.assertEqual(len(batch.items), 23)
+            self.assertEqual({item["statId"] for item in batch.items}, {f"PARALLEL{i:03d}" for i in range(23)})
+            self.assertEqual(set(opener.seen), {1, 2, 3})
+            self.assertEqual(budget.used, 3)
+            self.assertEqual(read_json(ledger)["calls"], 3)
+
+    def test_parallel_inventory_rejects_inconsistent_later_page(self):
+        def opener(request, timeout):
+            number = int(parse_qs(urlsplit(request.full_url).query)["pageNo"][0])
+            count = 21 if number == 2 else 20
+            return io.BytesIO(payload([row(station=f"P{number}-{i}") for i in range(10)], total=count, page=number))
+        client = OpenDataClient("TESTKEY", opener=opener, page_size=10, inventory_workers=2)
+        with self.assertRaises(CollectionError) as caught:
+            client.fetch_all("getChargerInfo")
+        self.assertEqual(caught.exception.code, "INCONSISTENT_PAGES")
+
+
 class BudgetTests(unittest.TestCase):
     def test_run_and_persisted_daily_limits_include_failed_attempts(self):
         clock = Clock()

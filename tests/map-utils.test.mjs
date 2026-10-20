@@ -44,6 +44,7 @@ test('수집된 이름·ID·상태 문구는 HTML 속성과 본문으로 안전�
   assert.match(html, /&lt;img/);
   assert.match(html, /&quot;/);
   assert.match(html, /aria-pressed="false"/);
+  assert.equal(html.includes('ev-map-pin-number'), false, 'marker sequence number must not appear');
 });
 
 test('상세를 위한 내부 이동 이후 idle과 resize는 기존 목록을 보존한다', () => {
