@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { gunzipSync } from 'node:zlib';
 
 const rawUrl = process.env.DEPLOYMENT_URL || process.argv[2];
 if (!rawUrl) throw new Error('Set DEPLOYMENT_URL or provide the published app URL.');
@@ -16,7 +17,7 @@ async function get(resource, json = false) {
   url.searchParams.set('verify', `${expectedRevision.slice(0, 12) || 'current'}-${Date.now()}`);
   const response = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { 'Cache-Control': 'no-cache' } });
   if (!response.ok) throw new Error(`${resource}: HTTP ${response.status}`);
-  return json ? response.json() : response.text();
+  return json === 'bytes' ? new Uint8Array(await response.arrayBuffer()) : json ? response.json() : response.text();
 }
 
 async function verify() {
@@ -34,9 +35,23 @@ async function verify() {
   if (manifest.mode === 'unconfigured' && (manifest.totalStations !== 0 || manifest.totalChargers !== 0 || manifest.regions.length)) {
     throw new Error('Unconfigured production must not contain example stations.');
   }
+  if (manifest.regions.length) {
+    // Do not accept a green deploy when a shard is missing or gzip JSON is invalid.
+    const entry = [...manifest.regions].sort((a, b) => a.chargerCount - b.chargerCount)[0];
+    const bytes = await get('data/' + entry.path, 'bytes');
+    const gz = bytes[0] === 0x1f && bytes[1] === 0x8b;
+    const region = JSON.parse(new TextDecoder().decode(gz ? gunzipSync(bytes) : bytes));
+    if (region.schemaVersion !== 1 || String(region.regionCode) !== String(entry.code)
+        || !Array.isArray(region.stations) || region.stations.length !== entry.stationCount) {
+      throw new Error('Published region data does not match its manifest.');
+    }
+    if (entry.encoding === 'gzip' && !entry.path.endsWith('.json.gz')) {
+      throw new Error('Compressed region path does not match its encoding.');
+    }
+  }
   if (manifest.mode === 'unconfigured') console.warn('Site is published; official data remains unconfigured.');
   console.log(JSON.stringify({ url: base.href, sourceRevision: build.sourceRevision, dataMode: manifest.mode,
-    stations: manifest.totalStations, chargers: manifest.totalChargers, verifiedAt: new Date().toISOString() }));
+    stations: manifest.totalStations, chargers: manifest.totalChargers, regionStorage: manifest.regionStorage || null, verifiedAt: new Date().toISOString() }));
 }
 
 for (let attempt = 1; attempt <= attempts; attempt++) {
