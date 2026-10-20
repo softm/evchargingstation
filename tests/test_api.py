@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import traceback
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -114,6 +115,92 @@ class ResponseTests(unittest.TestCase):
         self.assertNotIn(sample_secret, str(caught.exception))
         with self.assertRaises(CollectionError):
             parse_response(b'<!DOCTYPE response [<!ENTITY x "bad">]><response>&x;</response>')
+
+    def test_json_gateway_error_is_safe_directly_and_over_http(self):
+        sample_secret = "fixture-secret-never-log"
+        payload_bytes = json.dumps({"OpenAPI_ServiceResponse": {"cmmMsgHeader": {
+            "errMsg": "INVALID_REQUEST_PARAMETER_ERROR",
+            "returnAuthMsg": sample_secret,
+            "returnReasonCode": "10",
+        }}}).encode()
+        with self.assertRaises(CollectionError) as caught:
+            parse_response(payload_bytes)
+        self.assertEqual(caught.exception.code, "10")
+        self.assertNotIn(sample_secret, str(caught.exception))
+
+        body = io.BytesIO(payload_bytes)
+        error = HTTPError(f"https://example.invalid/?serviceKey={sample_secret}", 400, sample_secret, {}, body)
+        client = OpenDataClient(sample_secret, opener=QueueOpener([error]), retries=0)
+        with self.assertRaises(CollectionError) as caught:
+            client.fetch_all("getChargerInfo")
+        self.assertEqual(caught.exception.code, "10")
+        rendered = "".join(traceback.format_exception(caught.exception))
+        self.assertNotIn(sample_secret, rendered)
+        self.assertNotIn("example.invalid", rendered)
+        self.assertTrue(body.closed)
+
+    def test_http_forbidden_structured_errors_use_safe_provider_codes(self):
+        sample_secret = "fixture-secret-never-log"
+        for code in ("20", "30"):
+            bodies = (
+                f'<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>{sample_secret}</errMsg><returnReasonCode>{code}</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>'.encode(),
+                json.dumps({"response": {"header": {"resultCode": code, "resultMsg": sample_secret}}}).encode(),
+            )
+            for payload_bytes in bodies:
+                with self.subTest(code=code, format=payload_bytes[:1]):
+                    body = io.BytesIO(payload_bytes)
+                    error = HTTPError(f"https://example.invalid/?serviceKey={sample_secret}", 403, sample_secret, {}, body)
+                    client = OpenDataClient(sample_secret, opener=QueueOpener([error]), retries=0)
+                    with self.assertRaises(CollectionError) as caught:
+                        client.fetch_all("getChargerInfo")
+                    self.assertEqual(caught.exception.code, code)
+                    self.assertFalse(caught.exception.retryable)
+                    rendered = "".join(traceback.format_exception(caught.exception))
+                    self.assertNotIn(sample_secret, rendered)
+                    self.assertNotIn("example.invalid", rendered)
+                    self.assertTrue(body.closed)
+
+    def test_http_forbidden_unstructured_or_success_body_stays_masked(self):
+        sample_secret = "fixture-secret-never-log"
+        bodies = (
+            f"<html><body>Forbidden {sample_secret}</body></html>".encode(),
+            sample_secret.encode(),
+            json.dumps({"resultCode": sample_secret, "resultMsg": sample_secret}).encode(),
+            payload([]),
+        )
+        for payload_bytes in bodies:
+            with self.subTest(body=payload_bytes[:1]):
+                body = io.BytesIO(payload_bytes)
+                error = HTTPError(f"https://example.invalid/?serviceKey={sample_secret}", 403, sample_secret, {}, body)
+                client = OpenDataClient(sample_secret, opener=QueueOpener([error]), retries=0)
+                with self.assertRaises(CollectionError) as caught:
+                    client.fetch_all("getChargerInfo")
+                self.assertEqual(caught.exception.code, "HTTP_ERROR")
+                self.assertIn("HTTP 403", caught.exception.message)
+                rendered = "".join(traceback.format_exception(caught.exception))
+                self.assertNotIn(sample_secret, rendered)
+                self.assertNotIn("example.invalid", rendered)
+                self.assertTrue(body.closed)
+
+    def test_http_error_diagnostics_reject_oversized_bodies(self):
+        body = io.BytesIO(b'{"resultCode":"20"}' + b" " * (64 * 1024))
+        read = body.read
+        requested_sizes = []
+
+        def bounded_read(size=-1):
+            self.assertGreater(size, 0)
+            self.assertLessEqual(size, 64 * 1024 + 1)
+            requested_sizes.append(size)
+            return read(size)
+
+        error = HTTPError("https://example.invalid/", 403, "Forbidden", {}, body)
+        client = OpenDataClient("dummy", opener=QueueOpener([error]), retries=0)
+        with patch.object(body, "read", side_effect=bounded_read):
+            with self.assertRaises(CollectionError) as caught:
+                client.fetch_all("getChargerInfo")
+        self.assertEqual(caught.exception.code, "HTTP_ERROR")
+        self.assertTrue(requested_sizes)
+        self.assertTrue(body.closed)
 
     def test_encoded_key_is_encoded_once_and_all_pages_are_fetched(self):
         opener = QueueOpener([payload([row(charger=f"{i:02}") for i in range(10)], total=11), payload([row(charger="10")], total=11, page=2)])

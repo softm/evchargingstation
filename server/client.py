@@ -20,6 +20,7 @@ from xml.etree import ElementTree
 API_BASE = "https://apis.data.go.kr/B552584/EvCharger"
 KST = timezone(timedelta(hours=9))
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+MAX_ERROR_RESPONSE_BYTES = 64 * 1024
 
 
 def utcnow() -> datetime:
@@ -179,6 +180,11 @@ def parse_response(payload: bytes) -> Page:
         raise CollectionError("INVALID_RESPONSE", "공공데이터 JSON 응답을 읽을 수 없습니다.") from error
     if not isinstance(document, dict):
         raise CollectionError("INVALID_RESPONSE", "공공데이터 JSON 최상위 형식이 올바르지 않습니다.")
+    gateway = document.get("OpenAPI_ServiceResponse")
+    if isinstance(gateway, dict):
+        gateway_header = gateway.get("cmmMsgHeader")
+        if isinstance(gateway_header, dict):
+            _check_code(gateway_header.get("returnReasonCode"))
     document = document.get("response", document)
     if not isinstance(document, dict):
         raise CollectionError("INVALID_RESPONSE", "공공데이터 응답 구조가 올바르지 않습니다.")
@@ -278,6 +284,20 @@ class OpenDataClient:
                 return parse_response(payload)
             except HTTPError as error:
                 failure = CollectionError("HTTP_ERROR", f"공공데이터 서버가 HTTP {int(error.code)} 오류를 반환했습니다.", retryable=error.code == 429 or 500 <= error.code < 600)
+                try:
+                    with error:
+                        error_payload = error.read(MAX_ERROR_RESPONSE_BYTES + 1)
+                    if len(error_payload) <= MAX_ERROR_RESPONSE_BYTES:
+                        try:
+                            parse_response(error_payload)
+                        except CollectionError as upstream:
+                            # Only known provider codes and locally authored
+                            # messages may replace the generic HTTP diagnosis.
+                            if upstream.code in ERRORS:
+                                failure = upstream
+                except (OSError, HTTPException, ValueError, RecursionError):
+                    # Missing, unreadable or malformed bodies retain HTTP status.
+                    pass
             except (URLError, TimeoutError, OSError, HTTPException):
                 failure = CollectionError("NETWORK_ERROR", "공공데이터 서버 연결 또는 응답 수신에 실패했습니다.", retryable=True)
             except CollectionError as error:

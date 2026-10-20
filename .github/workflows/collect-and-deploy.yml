@@ -80,6 +80,18 @@ jobs:
           echo '::warning::Collection failed; last complete snapshot is retained. Its age is visible in the app.'
           echo '### Data collection needs attention' >> "$GITHUB_STEP_SUMMARY"
           echo 'The site will show the last complete snapshot and its original confirmation time. Check service authorization and quota.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Require successful requested full collection
+        if: github.event_name == 'workflow_dispatch' && inputs.collection_mode == 'full'
+        env:
+          COLLECTION_ENABLED: ${{ steps.configuration.outputs.enabled }}
+          COLLECTION_OUTCOME: ${{ steps.collect.outcome }}
+        run: |
+          if [ "$COLLECTION_ENABLED" != 'true' ] || [ "$COLLECTION_OUTCOME" != 'success' ]; then
+            echo '::error::The explicitly requested full collection did not succeed. A new deployment is blocked; the existing published site is retained.'
+            echo '### Requested full collection failed' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Full collection requires configured credentials and a successful collection step. Review collection authorization and errors before retrying. No new deployment was published.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
       - name: Check app contracts
         run: npm run check
       - name: Test domain and collector
