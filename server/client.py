@@ -6,6 +6,8 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from http.client import HTTPException
@@ -210,27 +212,32 @@ class CallBudget:
         self.clock = clock
         self.used = 0
         self._memory: dict[str, Any] = {}
+        self._lock = Lock()
 
     def reset_run(self) -> None:
-        self.used = 0
+        with self._lock:
+            self.used = 0
 
     def consume(self) -> None:
-        if self.used >= self.per_run:
-            raise CollectionError("RUN_BUDGET_EXCEEDED", "이번 수집의 API 호출 예산을 모두 사용했습니다.")
-        day = self.clock().astimezone(KST).date().isoformat()
-        ledger = read_json(self.ledger, {}) if self.ledger else self._memory
-        if not isinstance(ledger, dict):
-            ledger = {}
-        used = ledger.get("calls", 0) if ledger.get("date") == day else 0
-        if not isinstance(used, int) or isinstance(used, bool) or used < 0:
-            used = 0
-        if used >= self.per_day:
-            raise CollectionError("DAILY_BUDGET_EXCEEDED", "오늘 설정한 API 호출 예산을 모두 사용했습니다.")
-        updated = {"date": day, "calls": used + 1}
-        if self.ledger:
-            atomic_json(self.ledger, updated)
-        self._memory = updated
-        self.used += 1
+        # A full inventory requests at most a few pages concurrently. Protect
+        # the per-run budget AND the on-disk KST ledger under the same lock.
+        with self._lock:
+            if self.used >= self.per_run:
+                raise CollectionError("RUN_BUDGET_EXCEEDED", "이번 수집의 API 호출 예산을 모두 사용했습니다.")
+            day = self.clock().astimezone(KST).date().isoformat()
+            ledger = read_json(self.ledger, {}) if self.ledger else self._memory
+            if not isinstance(ledger, dict):
+                ledger = {}
+            used = ledger.get("calls", 0) if ledger.get("date") == day else 0
+            if not isinstance(used, int) or isinstance(used, bool) or used < 0:
+                used = 0
+            if used >= self.per_day:
+                raise CollectionError("DAILY_BUDGET_EXCEEDED", "오늘 설정한 API 호출 예산을 모두 사용했습니다.")
+            updated = {"date": day, "calls": used + 1}
+            if self.ledger:
+                atomic_json(self.ledger, updated)
+            self._memory = updated
+            self.used += 1
 
 
 class OpenDataClient:
@@ -245,11 +252,14 @@ class OpenDataClient:
         opener: Callable[..., Any] = urlopen,
         clock: Callable[[], datetime] = utcnow,
         sleeper: Callable[[float], None] = time.sleep,
+        inventory_workers: int = 1,
     ):
         if not service_key.strip():
             raise CollectionError("UNCONFIGURED", "DATA_GO_KR_SERVICE_KEY 설정이 필요합니다.")
         if not 10 <= page_size <= 9999:
             raise ValueError("page_size must be between 10 and 9999")
+        if not isinstance(inventory_workers, int) or not 1 <= inventory_workers <= 4:
+            raise ValueError("inventory_workers must be between 1 and 4")
         # unquote (not unquote_plus) preserves '+' in a decoded service key.
         self._service_key = unquote(service_key.strip())
         self.budget = budget or CallBudget()
@@ -259,6 +269,7 @@ class OpenDataClient:
         self.opener = opener
         self.clock = clock
         self.sleeper = sleeper
+        self.inventory_workers = inventory_workers
 
     def _page(self, operation: str, page_no: int, parameters: dict[str, Any]) -> Page:
         if operation not in {"getChargerInfo", "getChargerStatus"}:
@@ -307,7 +318,41 @@ class OpenDataClient:
             self.sleeper(min(2 ** attempt, 4))
         raise AssertionError("unreachable")
 
+    def _parallel_inventory(self, **parameters: Any) -> Batch:
+        """Bounded parallel full inventory: keep whole-page checks before publication."""
+        started = self.clock()
+        first = self._page("getChargerInfo", 1, parameters)
+        if first.page_no not in (None, 1) or first.total_count < 0:
+            raise CollectionError("PAGE_MISMATCH", "전체 목록의 첫 페이지 번호가 올바르지 않습니다.")
+        total = first.total_count
+        expected_pages = max(1, (total + self.page_size - 1) // self.page_size)
+        if len(first.items) != min(self.page_size, total):
+            raise CollectionError("INCOMPLETE_PAGE", "전체 목록 첫 페이지의 항목 수가 누락됐습니다.")
+        received = [{**item, "_observedAt": iso(self.clock())} for item in first.items]
+
+        def read(number: int) -> list[dict[str, Any]]:
+            page = self._page("getChargerInfo", number, parameters)
+            if page.page_no not in (None, number) or page.total_count != total:
+                raise CollectionError("INCONSISTENT_PAGES", "전국 목록 수집 중 페이지 또는 전체 건수가 달라졌습니다.")
+            expected_rows = min(self.page_size, total - (number - 1) * self.page_size)
+            if len(page.items) != expected_rows:
+                raise CollectionError("INCOMPLETE_PAGE", "전국 목록에 페이지 항목이 누락됐습니다.")
+            observed = iso(self.clock())
+            return [{**item, "_observedAt": observed} for item in page.items]
+
+        if expected_pages > 1:
+            # Only the inventory is parallelized. The rolling 10-minute state
+            # window is still fetched sequentially to preserve its semantics.
+            with ThreadPoolExecutor(max_workers=self.inventory_workers) as pool:
+                for chunk in pool.map(read, range(2, expected_pages + 1)):
+                    received.extend(chunk)
+        if len(received) != total:
+            raise CollectionError("INCOMPLETE_PAGE", "전체 충전기 개수가 제공기관의 건수와 다릅니다.")
+        return Batch(received, started, self.clock(), total, expected_pages)
+
     def fetch_all(self, operation: str, **parameters: Any) -> Batch:
+        if operation == "getChargerInfo" and self.inventory_workers > 1:
+            return self._parallel_inventory(**parameters)
         started = self.clock()
         result: list[dict[str, Any]] = []
         expected: int | None = None

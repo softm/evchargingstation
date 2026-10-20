@@ -1,5 +1,7 @@
 # 충전한눈 전기차 충전소 앱
 
+**2026-10-20 데이터 보강:** 환경공단 누락 시설·층수·제조사·연도 필드를 공개 데이터에 추가하고 24시간마다 전국 기반 목록을 재수집하며, GitHub Actions에서 5분 간격 상태 갱신을 수행하도록 작업했습니다. 공식 공공충전 요금표의 안내가는 별도 `fees.json`에 보관하고 회원·로밍·현장 금액과 구분합니다. 한국스마트그리드협회 요금표는 권리자에게 데이터 재이용 승인을 받은 뒤에만 자동 수집하도록 안전장치를 마련했습니다. [데이터 수집·스케줄 운영 기준](docs/DATA_COLLECTION.md)을 참고하세요.
+
 [앱 열기](https://softm.github.io/evchargingstation/) · [화면 체험](https://softm.github.io/evchargingstation/?demo=1) · [소스](https://github.com/softm/evchargingstation)
 
 **2026-10-20 최신 검증:** 공식 공공데이터 API에서 전국 충전소 **100,497곳·충전기 522,849대**의 전체 목록을 **53페이지·53회 요청**으로 수집했습니다. [GitHub Pages 배포 실행](https://github.com/softm/evchargingstation/actions/runs/39363450494)에서 전국 스냅샷 게시가 성공했습니다. 지역별 대용량 파일은 돌봄한눈 방식으로 gzip 압축해 전송합니다. **실배포 지역 데이터 16개 모두 gzip이며 177.7 MB에서 18.5 MB로 약 89.6% 줄었습니다.** API와 사용 가능한 충전 상태의 정확성은 수집 시점·상태 확인 시각에 좌우되며 예약 자동 갱신은 최초 검증 전까지 비활성입니다. [검증 기록](docs/VALIDATION.md)을 참고하세요.

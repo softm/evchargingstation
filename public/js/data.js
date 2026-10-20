@@ -136,7 +136,6 @@ export function selectViewportRegions(regions, bounds, limit = 4) {
     return score(a) - score(b);
   }).slice(0, limit);
 }
-
 /** SOFTM-EV-VIEWPORT: the visible list and map must share geographic bounds. */
 export function filterStationsToBounds(stations, bounds) {
   if (!Array.isArray(stations)) return [];
