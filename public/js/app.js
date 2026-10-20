@@ -13,7 +13,7 @@ const client = new DataClient(config);
 const demo = params.get('demo') === '1';
 const favoriteKey = demo ? 'evchargingstation:demo-favorites:v1' : 'evchargingstation:favorites:v1';
 const sharedFilters = { query: (params.get('q') || '').slice(0, 200), connector: ['combo', 'ac', 'nacs', 'chademo', 'ac3', 'combo2'].includes(params.get('connector')) ? params.get('connector') : '', minPower: [50, 100, 200, 300].includes(Number(params.get('kw'))) ? Number(params.get('kw')) : 0, available: params.get('available') === '1', unrestricted: params.get('public') === '1', freeParking: params.get('parking') === '1', sort: ['available', 'distance', 'name'].includes(params.get('sort')) ? params.get('sort') : 'available' };
-const state = { manifest: null, regions: new Map(), activeCodes: [], filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || 'auto', bounds: null, locationPoint: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: sharedView?.center || { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
+const state = { manifest: null, regions: new Map(), activeCodes: [], filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || 'auto', bounds: null, appliedBounds: null, locationPoint: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: sharedView?.center || { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
 let map = null;
 let preserveSelectedView = false;
 let toastTimer;
@@ -153,7 +153,7 @@ function render() {
   const knownWarnings = new Set(['NOT_CONFIGURED', 'UNCONFIGURED', 'INITIALIZING', 'INVALID_COORDINATES']);
   const collectionFailed = [...warningCodes].some(code => !knownWarnings.has(code));
   const warnings = [warningCodes.has('INITIALIZING') && stations.length ? '최신 충전소 정보를 수집하고 있습니다.' : '', warningCodes.has('INVALID_COORDINATES') ? '위치 정보가 없는 충전소는 목록에서 확인할 수 있습니다.' : '', collectionFailed ? '데이터 갱신이 지연되고 있습니다. 마지막으로 확인된 정보와 확인 시각을 확인해 주세요.' : ''].filter(Boolean);
-  const areaNeedsLoad = mapSearchPending && (state.region !== 'auto' || regionEntries().some(entry => !state.activeCodes.includes(String(entry.code))));
+  const areaNeedsLoad = mapSearchPending && (state.region !== 'auto' || selectViewportRegions(state.manifest?.regions || [], state.bounds, 4).some(entry => !state.activeCodes.includes(String(entry.code))));
   const issue = [areaNeedsLoad ? '이 화면의 일부 지역 데이터는 아직 조회하지 않았습니다. 지도 위 이 지역 검색을 누르세요.' : '', state.partialError, state.error && stations.length ? `${state.error} 마지막으로 확인한 정보를 표시합니다.` : '', ...warnings].filter(Boolean).join(' ');
   $('resultNotice').textContent = issue;
   $('resultNotice').hidden = !issue;
@@ -177,7 +177,7 @@ function fillRegions() {
 function regionEntries() {
   const entries = state.manifest?.regions || [];
   if (state.region !== 'auto') return entries.filter(region => String(region.code) === state.region);
-  const bounds = state.bounds || { south: state.center.lat - .05, north: state.center.lat + .05, west: state.center.lng - .08, east: state.center.lng + .08 };
+  const bounds = state.appliedBounds || state.bounds || { south: state.center.lat - .05, north: state.center.lat + .05, west: state.center.lng - .08, east: state.center.lng + .08 };
   return selectViewportRegions(entries, bounds, 4);
 }
 
@@ -252,6 +252,7 @@ async function refresh() {
       if (center && map?.setCenter(center, 11)) {
         state.center = map.getCenter();
         state.bounds = map.getBounds();
+        state.appliedBounds = state.bounds;
       }
     }
     await loadRegions(true);
@@ -408,6 +409,7 @@ async function initializeMap() {
     else map.setCenter(state.center, 14);
     // Load only the provinces intersecting the actually centered map.
     state.bounds = map.getBounds();
+    state.appliedBounds = state.bounds;
     state.center = map.getCenter();
     mapSearchPending = false;
     updateMapSearchButton();
@@ -432,6 +434,7 @@ function bindEvents() {
   $('searchThisArea').addEventListener('click', async () => {
     if (state.loading || !state.bounds) return;
     clearTimeout(boundsTimer);
+    state.appliedBounds = state.bounds;
     mapSearchPending = false;
     state.region = 'auto';
     $('regionSelect').value = 'auto';
@@ -451,6 +454,7 @@ function bindEvents() {
       map?.setCenter(center, 11);
     }
     state.bounds = map?.getBounds() || state.bounds;
+    state.appliedBounds = state.bounds;
     state.center = map?.getCenter() || state.center;
     mapSearchPending = false;
     updateMapSearchButton();
@@ -493,6 +497,7 @@ function bindEvents() {
     if (map) {
       map.locate(result.point);
       state.bounds = map.getBounds();
+      state.appliedBounds = state.bounds;
       state.center = map.getCenter();
     }
     $('mapMessage').hidden = true;
