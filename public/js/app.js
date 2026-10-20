@@ -1,5 +1,6 @@
 import { createMap, parseSharedView } from './map.js';
-import { DataClient, selectViewportRegions } from './data.js';
+import { DataClient, selectViewportRegions, filterStationsToBounds, sameMapBounds } from './data.js';
+import { getBrowserLocation, locationMessage } from './location.js';
 import { DEFAULT_FILTERS, chargerState, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, safePhone, sourceUrl } from './domain.js';
 
 const $ = id => document.getElementById(id);
@@ -12,7 +13,7 @@ const client = new DataClient(config);
 const demo = params.get('demo') === '1';
 const favoriteKey = demo ? 'evchargingstation:demo-favorites:v1' : 'evchargingstation:favorites:v1';
 const sharedFilters = { query: (params.get('q') || '').slice(0, 200), connector: ['combo', 'ac', 'nacs', 'chademo', 'ac3', 'combo2'].includes(params.get('connector')) ? params.get('connector') : '', minPower: [50, 100, 200, 300].includes(Number(params.get('kw'))) ? Number(params.get('kw')) : 0, available: params.get('available') === '1', unrestricted: params.get('public') === '1', freeParking: params.get('parking') === '1', sort: ['available', 'distance', 'name'].includes(params.get('sort')) ? params.get('sort') : 'available' };
-const state = { manifest: null, regions: new Map(), activeCodes: [], filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || 'auto', bounds: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: sharedView?.center || { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
+const state = { manifest: null, regions: new Map(), activeCodes: [], filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || 'auto', bounds: null, locationPoint: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: sharedView?.center || { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
 let map = null;
 let preserveSelectedView = false;
 let toastTimer;
@@ -20,6 +21,7 @@ let boundsTimer;
 let inputTimer;
 let refreshTimer;
 let demoRegion;
+let initialRegionCentered = false;
 let mapSearchPending = false;
 
 function updateMapSearchButton() {
@@ -103,7 +105,7 @@ function scopeLabel() {
   const names = (state.manifest?.regions || []).filter(entry => state.activeCodes.includes(String(entry.code))).map(entry => entry.name);
   if (demo) return '서울 · 화면 체험용 가상 충전소';
   if (!names.length) return state.manifest?.mode === 'unconfigured' ? '실제 데이터 연결 후 검색할 수 있습니다' : '선택한 지역 안에서 검색합니다';
-  return `${names.join(' · ')}${state.region === 'auto' ? ' · 지도 주변 지역' : ' 전체'} 안에서 검색${state.filters.favorites ? ' · 저장한 충전소' : ''}`;
+  return `${names.join(' · ')} · 현재 지도 화면 기준${state.filters.favorites ? ' · 저장한 충전소' : ''}`;
 }
 
 function emptyHTML() {
@@ -129,7 +131,9 @@ function stationCard(station, index) {
 }
 
 function render() {
-  const stations = allStations();
+  // A region shard can span tens of thousands of places; lists, counts and
+  // markers must all use only the visible map viewport.
+  const stations = filterStationsToBounds(allStations(), state.bounds);
   const now = Date.now();
   state.summaries = new Map(stations.map(station => [station.id, summarizeStation(station, stationRegion(station), state.filters, now, threshold())]));
   state.visible = filterStations(stations, state.regions, state.filters, state.favorites, now, threshold());
@@ -149,11 +153,12 @@ function render() {
   const knownWarnings = new Set(['NOT_CONFIGURED', 'UNCONFIGURED', 'INITIALIZING', 'INVALID_COORDINATES']);
   const collectionFailed = [...warningCodes].some(code => !knownWarnings.has(code));
   const warnings = [warningCodes.has('INITIALIZING') && stations.length ? '최신 충전소 정보를 수집하고 있습니다.' : '', warningCodes.has('INVALID_COORDINATES') ? '위치 정보가 없는 충전소는 목록에서 확인할 수 있습니다.' : '', collectionFailed ? '데이터 갱신이 지연되고 있습니다. 마지막으로 확인된 정보와 확인 시각을 확인해 주세요.' : ''].filter(Boolean);
-  const issue = [state.partialError, state.error && stations.length ? `${state.error} 마지막으로 확인한 정보를 표시합니다.` : '', ...warnings].filter(Boolean).join(' ');
+  const areaNeedsLoad = mapSearchPending && (state.region !== 'auto' || regionEntries().some(entry => !state.activeCodes.includes(String(entry.code))));
+  const issue = [areaNeedsLoad ? '이 화면의 일부 지역 데이터는 아직 조회하지 않았습니다. 지도 위 이 지역 검색을 누르세요.' : '', state.partialError, state.error && stations.length ? `${state.error} 마지막으로 확인한 정보를 표시합니다.` : '', ...warnings].filter(Boolean).join(' ');
   $('resultNotice').textContent = issue;
   $('resultNotice').hidden = !issue;
   const waiting = state.visible.reduce((sum, station) => sum + state.summaries.get(station.id).available, 0);
-  $('mapSummary').innerHTML = `${icon('pin')}<span>${state.visible.length ? `${demo ? '가상 예시 · ' : ''}충전소 <b>${state.visible.length.toLocaleString('ko-KR')}</b>곳 <span aria-hidden="true">·</span> 충전 대기 <b>${waiting.toLocaleString('ko-KR')}</b>기` : state.manifest?.mode === 'unconfigured' ? '충전소 데이터 연결을 준비하고 있습니다' : '지도를 움직여 주변을 탐색하세요'}</span>`;
+  $('mapSummary').innerHTML = `${icon('pin')}<span>${state.visible.length ? `${demo ? '가상 예시 · ' : ''}화면 안 충전소 <b>${state.visible.length.toLocaleString('ko-KR')}</b>곳 <span aria-hidden="true">·</span> 충전 대기 <b>${waiting.toLocaleString('ko-KR')}</b>기` : state.manifest?.mode === 'unconfigured' ? '충전소 데이터 연결을 준비하고 있습니다' : '지도를 움직여 주변을 탐색하세요'}</span>`;
   $('mapEmpty').hidden = true;
   const freshest = [...state.regions.values()].filter(region => state.activeCodes.includes(String(region.regionCode))).map(region => region.statusCoverageAt || region.generatedAt).filter(Boolean).sort().at(-1);
   $('freshnessLine').querySelector('span').textContent = demo ? '가상 예시 · 실제 충전 상태가 아닙니다' : state.manifest?.mode === 'unconfigured' ? '연결 후 충전기별 확인 시각을 표시합니다' : freshest ? `지역 데이터 ${relativeTime(freshest)} · 상태는 충전기별 확인` : '충전 상태 확인 시각을 함께 표시합니다';
