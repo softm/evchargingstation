@@ -68,7 +68,21 @@ API에는 과거 전체 변경 이력을 되짚는 cursor가 없습니다. 10분
 
 주기 수집이 실패해도 새 UI 배포는 계속할 수 있지만 이전 snapshot의 확인 시각은 유지합니다. Actions 요약과 warning에 수집 실패를 남깁니다. 무결성을 확인한 지역 파일을 먼저 쓰고 manifest를 마지막에 교체해 서로 다른 실행의 파일이 섞이지 않게 합니다.
 
-명시적으로 `workflow_dispatch`에서 `collection_mode: full`을 선택한 실행은 수집 설정 활성과 수집 단계 성공을 모두 요구합니다. 충족하지 않으면 요청 예산·이전 정상 데이터 캐시를 보존한 뒤 오류로 종료하고 신규 빌드·배포를 중단합니다. `push`, 수동 `auto`, 예약 실행의 기존 snapshot 보존·UI 배포 정책은 유지합니다. 2026-10-20 현재 실제 수집은 인증 오류로 미완료이며 예약 수집은 비활성입니다. [최신 검증 기록](VALIDATION.md)을 참고하세요.
+명시적으로 `workflow_dispatch`에서 `collection_mode: full`을 선택한 실행은 수집 설정 활성과 수집 단계 성공을 모두 요구합니다. 충족하지 않으면 요청 예산·이전 정상 데이터 캐시를 보존한 뒤 오류로 종료하고 신규 빌드·배포를 중단합니다. `push`, 수동 `auto`, 예약 실행의 기존 snapshot 보존·UI 배포 정책은 유지합니다. 2026-10-20 현재 53페이지의 전국 충전소 기본 데이터 수집과 GitHub Pages 스냅샷 게시가 성공했으며, 예약 수집은 실제 호출량·최신성 검증 전까지 비활성입니다. [최신 검증 기록](VALIDATION.md)을 참고하세요.
+
+## GitHub Pages gzip 데이터 배포
+
+원본 API `getChargerInfo`의 수집 결과는 지역별 JSON으로 수집·검증·보관합니다. Python API와 비공개 `.cache/evchargingstation`의 원본 계약을 변경하지 않습니다.
+
+정적 Pages 빌드 단계 `scripts/compress-data.mjs`에서 `dist/data/releases/<릴리스>/regions/*.json`을 Node.js 스트리밍 gzip으로 압축한 후, **압축률이 유리한 파일만** `.json.gz`로 바꿉니다. 빌드본 `manifest.json`의 `regions[].path` 및 `encoding`, `originalBytes`, `compressedBytes`, `regionStorage`를 최신 상태로 기록합니다. 매니페스트 자체는 일반 JSON입니다.
+
+브라우저는 [돌봄한눈](https://github.com/softm/homecare-nationwide-care-services-map/blob/main/care-data.js)처럼 gzip 헤더를 검사해 `DecompressionStream('gzip')`으로 복원합니다. 서버가 Content-Encoding을 자동으로 해제했거나 로컬 Python API가 일반 JSON을 반환하면 재해제하지 않습니다. 상태코드·충전기ID·위치 및 데이터 시각은 압축 전후 동일해야 합니다.
+
+현재 화면 최대 4개 지역만 요청하고, 변경 불가능한 파일 경로에 대해 HTTP 캐시를 활용합니다. 앱 내부 캐시·지역 데이터 Map에서도 화면에서 벗어난 지역은 정리하여 모바일 메모리 누적을 줄입니다.
+
+데이터 수집 완료 여부와 UI 배포 성공 여부는 분리해서 판정합니다. 수집이 성공해도 Pages 배포 파일이 누락되면 완료로 간주하지 않고, `npm run verify:deployment`가 실제 게시된 지역 데이터를 열어 개수·스키마를 검증합니다.
+
+코드만 수정한 `push`에서는 캐시된 정상 전국 매니페스트와 지역 파일 존재 여부를 확인해 원본 재수집을 생략할 수 있습니다. 없거나 유효하지 않으면 `auto`로 수집하며, 수동 `full`과 예약 `auto`의 데이터 정확성 절차는 유지합니다.
 
 ## 최초 실데이터 확인 절차
 
