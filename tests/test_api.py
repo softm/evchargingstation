@@ -272,6 +272,34 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(charger["statusChangedAt"], "2020-01-01T03:00:00Z")
         self.assertEqual(charger["observedAt"], "2026-10-19T00:00:00Z")
 
+    def test_all_published_facility_and_charger_fields_survive_normalization(self):
+        first = row(
+            kind="A0", kindDetail="A001", trafficYn="Y",
+            floorNum="B2", floorType="B", maker="충전기제조사",
+            year="2024", powerType="DC",
+        )
+        second = row(
+            charger="03", kind="A0", kindDetail="A001", trafficYn="Y",
+            floorNum="B3", floorType="B", maker="다른제조사",
+            year="2025", powerType="AC",
+        )
+        station = normalize_station("TEST001", [first, second])
+        self.assertEqual(station["facilityKind"], "A0")
+        self.assertEqual(station["facilityDetailCode"], "A001")
+        self.assertTrue(station["convenienceProvided"])
+        self.assertIn("B2", station["floorNumbers"])
+        self.assertIn("B3", station["floorNumbers"])
+        self.assertEqual(station["floorTypes"], "B")
+        charger = station["chargers"][0]
+        self.assertEqual(charger["manufacturer"], "충전기제조사")
+        self.assertEqual(charger["installationYear"], "2024")
+        self.assertEqual(charger["floorNumber"], "B2")
+        self.assertEqual(charger["floorType"], "B")
+        self.assertEqual(charger["powerType"], "DC")
+        empty = normalize_station("UNKNOWN", [row()])
+        self.assertIsNone(empty["convenienceProvided"])
+        self.assertEqual(empty["chargers"][0]["manufacturer"], "")
+
     def test_unknown_new_codes_and_invalid_coordinates_do_not_become_available(self):
         station = normalize_station("A", [row(stat="77", chgerType="11", output="50+50", lat="0", lng="0")])
         self.assertEqual(station["chargers"][0]["status"], "77")
