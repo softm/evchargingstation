@@ -74,7 +74,7 @@ export function buildMarkerModels(stations, { selectedId, summaries = new Map() 
     const tone = confirmed && summary?.tone === 'available' && available > 0 ? 'available' : summary?.tone === 'busy' ? 'busy' : 'unknown';
     const label = String(summary?.label || '상태 미확인');
     return [{ id, station, number: index + 1, selected: String(selectedId ?? '') === id, tone,
-      count: confirmed && tone !== 'unknown' ? `${available}/${total}` : '?', label }];
+      count: total !== null ? `${total}기` : '—', label }];
   });
 }
 
