@@ -24,6 +24,8 @@ def main() -> int:
     parser.add_argument("--state-dir", type=Path, default=REPOSITORY / ".cache" / "evchargingstation")
     parser.add_argument("--period", type=int, choices=range(1, 11), default=10, metavar="1..10")
     parser.add_argument("--page-size", type=int, default=9999)
+    parser.add_argument("--inventory-workers", type=int, choices=range(1, 5), default=3,
+                        help="전국 목록 페이징 병렬 요청 수 (기본 3, 최대 4)")
     parser.add_argument("--max-calls", type=int, help="이번 실행 호출 예산; 기본 MAX_API_CALLS_PER_RUN 또는 100")
     parser.add_argument("--max-daily-calls", type=int, help="KST 기준 일일 호출 예산; 기본 MAX_API_CALLS_PER_DAY 또는 1000")
     arguments = parser.parse_args()
@@ -44,7 +46,8 @@ def main() -> int:
             ledger=arguments.state_dir / "budget.json",
         )
         collector = Collector(
-            OpenDataClient(service_key, budget=budget, page_size=arguments.page_size),
+            OpenDataClient(service_key, budget=budget, page_size=arguments.page_size,
+                           inventory_workers=arguments.inventory_workers),
             output_dir=arguments.output, state_dir=arguments.state_dir,
             period=arguments.period,
             inventory_refresh_seconds=positive_environment("INVENTORY_REFRESH_SECONDS", 86400),
