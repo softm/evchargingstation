@@ -4,7 +4,7 @@
 
 [앱 열기](https://softm.github.io/evchargingstation/) · [화면 체험](https://softm.github.io/evchargingstation/?demo=1) · [소스](https://github.com/softm/evchargingstation)
 
-**2026-10-20 최신 검증:** 공식 공공데이터 API에서 전국 충전소 **100,497곳·충전기 522,849대**의 전체 목록을 **53페이지·53회 요청**으로 수집했습니다. [GitHub Pages 배포 실행](https://github.com/softm/evchargingstation/actions/runs/39363450494)에서 전국 스냅샷 게시가 성공했습니다. 지역별 대용량 파일은 돌봄한눈 방식으로 gzip 압축해 전송합니다. **실배포 지역 데이터 16개 모두 gzip이며 177.7 MB에서 18.5 MB로 약 89.6% 줄었습니다.** API와 사용 가능한 충전 상태의 정확성은 수집 시점·상태 확인 시각에 좌우되며 예약 자동 갱신은 최초 검증 전까지 비활성입니다. [검증 기록](docs/VALIDATION.md)을 참고하세요.
+**2026-10-20 최신 검증:** 공식 공공데이터 API에서 전국 충전소 **100,497곳·충전기 522,849대**의 전체 목록을 **53페이지·53회 요청**으로 수집했습니다. [GitHub Pages 배포 실행](https://github.com/softm/evchargingstation/actions/runs/39363450494)에서 전국 스냅샷 게시가 성공했습니다. 지역별 대용량 파일은 돌봄한눈 방식으로 gzip 압축해 전송합니다. **실배포 지역 데이터 16개 모두 gzip이며 177.7 MB에서 18.5 MB로 약 89.6% 줄었습니다.** API와 사용 가능한 충전 상태의 정확성은 수집 시점·상태 확인 시각에 좌우됩니다. 예약 갱신은 2026-10-20 활성화했으며 GitHub Actions 지연 시 전체 재동기화합니다. [검증 기록](docs/VALIDATION.md)을 참고하세요.
 
 한국환경공단의 충전소·충전기 정보를 지도와 목록으로 확인하는 앱입니다. 사용자 소유 [돌봄한눈 소스](https://github.com/softm/homecare-nationwide-care-services-map)의 지도 동작과 작은 공통 모듈을 활용했습니다.
 
@@ -57,7 +57,7 @@ python3 -m server --host 127.0.0.1 --port 8000
 2. [Actions Secrets](https://github.com/softm/evchargingstation/settings/secrets/actions)에 `DATA_GO_KR_SERVICE_KEY`를 등록합니다. 브라우저에 전달되지 않는 서버용 키입니다.
 3. [Actions](https://github.com/softm/evchargingstation/actions/workflows/collect-and-deploy.yml)에서 `Run workflow` → `collection_mode: full`을 실행합니다.
 4. 앱의 실제 충전소 수, 수집 시각, 지역 분할 로딩, 임의의 실제 충전기 상태를 원본과 대조합니다. 호출 허용량도 확인합니다.
-5. [Actions Variables](https://github.com/softm/evchargingstation/settings/variables/actions)에 `ENABLE_SCHEDULED_COLLECTION=true`를 등록하면 5분 간격 예약 수집 대상이 됩니다. 최초 `full` 수집과 실제 응답 검증이 끝난 뒤에만 예약 수집을 켭니다.
+5. 예약 수집은 기본 활성입니다. 일시 중지하려면 [Actions Variables](https://github.com/softm/evchargingstation/settings/variables/actions)에 `PAUSE_EV_COLLECTION=true`를 설정합니다. 요금 자료는 별도로 적법한 재이용 승인을 확인한 뒤에만 `CHARGEINFO_REUSE_APPROVED=true`로 활성화합니다.
 
 | 설정 | 구분 | 기본값·용도 |
 | --- | --- | --- |
@@ -65,7 +65,8 @@ python3 -m server --host 127.0.0.1 --port 8000
 | `PUBLIC_NAVER_MAP_CLIENT_ID` | Variable | 기존 지도 공개 Application Key ID 사용. 다른 앱 ID로 교체 가능 |
 | `PUBLIC_EV_API_BASE_URL` | Variable | 비우면 정적 snapshot. 운영 API가 있으면 HTTPS 주소 |
 | `PUBLIC_EV_DATA_BASE_URL` | Variable | 기본 `./data` |
-| `ENABLE_SCHEDULED_COLLECTION` | Variable | 기본 비활성. `true`일 때만 예약 수집 |
+| `PAUSE_EV_COLLECTION` | Variable | 기본 예약 수집 활성. `true`일 때 중지 |
+| `CHARGEINFO_REUSE_APPROVED` | Variable | 기본 요금표 외부 수집 비활성. 허가·계약 확보 후 `true`로 허용 |
 | `MAX_API_CALLS_PER_RUN` | Variable | 기본 100, 페이지·재시도 포함 |
 | `MAX_API_CALLS_PER_DAY` | Variable | 기본 1000, 실제 승인된 계정 한도에 맞춤 |
 
