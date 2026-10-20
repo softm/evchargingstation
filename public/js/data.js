@@ -1,5 +1,23 @@
 import { intersects } from './domain.js';
 
+
+/** Pages .json.gz is raw gzip; some CDNs transparently decode Content-Encoding. */
+export async function decodeJsonData(response) {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const gzip = bytes.length > 1 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+  if (gzip && typeof DecompressionStream !== 'function') {
+    throw new Error('압축된 충전소 정보를 읽으려면 브라우저를 최신 버전으로 업데이트해 주세요.');
+  }
+  const text = gzip
+    ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
+    : new TextDecoder().decode(bytes);
+  let data;
+  try { data = JSON.parse(text); }
+  catch { throw new Error('충전소 데이터 파일을 해석할 수 없습니다.'); }
+  if (!data || data.schemaVersion !== 1) throw new Error('데이터 형식을 확인할 수 없습니다.');
+  return data;
+}
+
 export class DataClient {
   constructor(config = {}) {
     this.base = new URL(`${String(config.apiBaseUrl || config.dataBaseUrl || './data').replace(/\/$/, '')}/`, location.href);
@@ -10,15 +28,17 @@ export class DataClient {
     const url = new URL(path, this.base);
     if (url.origin !== this.base.origin || !url.pathname.startsWith(this.base.pathname)) throw new Error('지원하지 않는 데이터 경로입니다.');
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), path === 'manifest.json' ? 15000 : 30000);
     const abort = () => controller.abort();
     if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
     try {
-      const response = await fetch(url, { cache: 'no-store', signal: controller.signal, headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`데이터를 불러오지 못했습니다. (${response.status})`);
-      const result = await response.json();
-      if (result.schemaVersion !== 1) throw new Error('데이터 형식을 확인할 수 없습니다.');
-      return result;
+      const response = await fetch(url, {
+        cache: path === 'manifest.json' ? 'no-store' : 'default',
+        signal: controller.signal,
+        headers: { Accept: 'application/json, application/gzip' },
+      });
+      if (!response.ok) throw new Error('데이터를 불러오지 못했습니다. (' + response.status + ')');
+      return await decodeJsonData(response);
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.');
       throw error;
