@@ -253,14 +253,22 @@ function favorite(id) {
   if (station && $('stationDialog').open) renderDetails(station);
 }
 
-function selectStation(id, { preserveView = false } = {}) {
+function selectStation(id, { preserveView = false, origin = 'list' } = {}) {
   const station = allStations().find(item => item.id === id);
   if (!station) return;
   state.navigationRevision++;
   state.selectedId = id;
   preserveSelectedView = preserveView;
+  const index = state.visible.findIndex(item => String(item.id) === String(id));
+  if (origin === 'map' && index >= state.listLimit) state.listLimit = Math.ceil((index + 1) / 60) * 60;
   render();
-  if (hasCoordinates(station) && !preserveView) map?.focus(station, { zoom: 16 });
+  if (origin === 'map') {
+    requestAnimationFrame(() => {
+      const card = [...$('listContent').querySelectorAll('.station-card')].find(node => node.dataset.stationId === String(id));
+      card?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    });
+  }
+  if (hasCoordinates(station) && !preserveView) map?.focus(station, { zoom: Math.max(16, map?.getZoom?.() || 16) });
   renderDetails(station);
   if (!$('stationDialog').open) $('stationDialog').showModal();
 }
@@ -339,7 +347,7 @@ function setMobileView(view) {
 
 async function initializeMap() {
   try {
-    map = await createMap({ container: $('map'), config, onSelect: id => selectStation(String(id)), onBoundsChange: bounds => {
+    map = await createMap({ container: $('map'), config, onSelect: id => selectStation(String(id), { origin: 'map' }), onBoundsChange: bounds => {
       state.navigationRevision++;
       state.bounds = bounds;
       state.center = map?.getCenter() || { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildMarkerModels, containsCoordinate, createViewportGate, isCoordinate, markerHtml, normalizeBounds, parseSharedView, selectMarkerModels } from '../public/js/map.js';
+import { buildMarkerModels, containsCoordinate, createViewportGate, isCoordinate, labelBudget, markerHtml, markerScale, normalizeBounds, parseSharedView, selectMarkerModels } from '../public/js/map.js';
 
 test('좌표 미제공·빈 문자열·NaN을 실제 0도 위치로 바꾸지 않는다', () => {
   for (const point of [null, {}, { lat: null, lng: null }, { lat: '', lng: '' }, { lat: '37.5', lng: '127' }, { lat: NaN, lng: 127 }, { lat: 91, lng: 127 }, { lat: 0, lng: 0 }]) assert.equal(isCoordinate(point), false);
@@ -113,3 +113,9 @@ test('재사용한 두 파일이 원본 Git blob과 일치하여 출처 기록�
   }
 });
 /** SOFTM-EV-MAP-TEST END */
+
+test('돌봄한눈 배율 단계에 맞춰 점·핀·이름·상세 레벨을 나눈다', () => {
+  assert.deepEqual([10, 13, 14, 15, 16, 17, 18, 19].map(markerScale), ['dot','dot','pin','pin','name','name','detail','detail']);
+  assert.ok(labelBudget(12,800,600) <= labelBudget(16,800,600));
+  assert.ok(labelBudget(18,800,600) <= 40);
+});
