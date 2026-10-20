@@ -123,11 +123,8 @@ export class DataClient {
 export function selectViewportRegions(regions, bounds, limit = 4) {
   if (!bounds) return [];
   const center = { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
-  // When no envelope intersects (e.g. an island or a new region code), show the
-  // nearest available shards instead of leaving an otherwise valid map empty.
-  const matching = regions.filter(region => intersects(bounds, region.bounds));
-  const candidates = matching.length ? matching : regions;
-  return [...candidates].sort((a, b) => {
+  const matches = regions.filter(region => intersects(bounds, region.bounds));
+  return matches.sort((a, b) => {
     const score = region => Math.abs((region.bounds.south + region.bounds.north) / 2 - center.lat) + Math.abs((region.bounds.west + region.bounds.east) / 2 - center.lng);
     return score(a) - score(b);
   }).slice(0, limit);
