@@ -241,6 +241,19 @@ async function refresh() {
     if (demo) { const { createDemo } = await import('./demo.js'); const data = createDemo(); state.manifest = data.manifest; demoRegion = data.region; }
     else { state.manifest = await client.manifest(); if (state.manifest.mode === 'demo') throw new Error('실제 데이터 연결을 확인해 주세요.'); }
     fillRegions();
+    // Direct province links must start from that province, not from Seoul.
+    if (!initialRegionCentered && !demo && !sharedView && !state.sharedId && state.region !== 'auto') {
+      initialRegionCentered = true;
+      const entry = state.manifest.regions.find(item => String(item.code) === state.region);
+      const center = entry?.center || (entry?.bounds && {
+        lat: (entry.bounds.south + entry.bounds.north) / 2,
+        lng: (entry.bounds.west + entry.bounds.east) / 2
+      });
+      if (center && map?.setCenter(center, 11)) {
+        state.center = map.getCenter();
+        state.bounds = map.getBounds();
+      }
+    }
     await loadRegions(true);
   } catch (error) { state.error = error.message || '네트워크 연결을 확인해 주세요.'; state.loading = false; render(); }
 }
@@ -282,7 +295,16 @@ function selectStation(id, { preserveView = false, origin = 'list' } = {}) {
       card?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
     });
   }
-  if (hasCoordinates(station) && !preserveView) map?.focus(station, { zoom: Math.max(16, map?.getZoom?.() || 16) });
+  if (origin !== 'map' && hasCoordinates(station) && !preserveView && map?.focus(station, { zoom: Math.max(16, map?.getZoom?.() || 16) })) {
+    // After the map adapter applies its panel-aware centering, update the
+    // viewport-limited list. Map clicks do not force unexpected zooming.
+    requestAnimationFrame(() => {
+      if (state.selectedId !== id) return;
+      state.bounds = map?.getBounds() || state.bounds;
+      state.center = map?.getCenter() || state.center;
+      render();
+    });
+  }
   renderDetails(station);
   // Nonmodal panel preserves an interactive, unblurred map and list.
   if (!$('stationDialog').open) $('stationDialog').show();
@@ -363,19 +385,32 @@ function setMobileView(view) {
 async function initializeMap() {
   try {
     map = await createMap({ container: $('map'), config, onSelect: id => selectStation(String(id), { origin: 'map' }), onBoundsChange: bounds => {
+      if (sameMapBounds(state.bounds, bounds)) return;
       state.navigationRevision++;
       state.bounds = bounds;
       state.center = map?.getCenter() || { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
-      // Do not change the loaded region/list while the user is panning.
-      // The explicit overlay button applies the new viewport on demand.
+      // Immediately filter loaded stations to current bounds, but fetch any
+      // additional regional shards only after the overlay search is clicked.
       clearTimeout(boundsTimer);
       mapSearchPending = true;
       updateMapSearchButton();
+      boundsTimer = setTimeout(() => {
+        state.listLimit = 60;
+        render();
+        $('listContent').scrollTop = 0;
+      }, 100);
     }, onBackgroundClick: () => { if ($('stationDialog').open) closeDetails(); }, onError: error => { if (error?.recoverable) return; $('mapMessage').textContent = error?.message || '지도를 불러오지 못했습니다. 충전소 목록을 이용해 주세요.'; $('mapMessage').hidden = false; } });
     const selected = currentStation();
-    if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
+    if (state.locationPoint) map.locate(state.locationPoint);
+    else if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
     else if (sharedView) map.setCenter(sharedView.center, sharedView.zoom);
     else if (demo) map.setCenter({ lat: 37.5658, lng: 126.979 }, 14);
+    else map.setCenter(state.center, 14);
+    // Load only the provinces intersecting the actually centered map.
+    state.bounds = map.getBounds();
+    state.center = map.getCenter();
+    mapSearchPending = false;
+    updateMapSearchButton();
     render();
   } catch (error) { $('mapMessage').textContent = '지도를 불러오지 못했습니다. 충전소 목록에서 정보를 확인할 수 있습니다.'; $('mapMessage').hidden = false; }
 }
@@ -409,10 +444,16 @@ function bindEvents() {
   $('regionSelect').addEventListener('change', async event => {
     state.navigationRevision++;
     state.region = event.target.value; state.sharedId = null; state.listLimit = 60;
+    const entry = state.manifest?.regions.find(region => String(region.code) === state.region);
+    if (entry?.bounds) {
+      const center = entry.center || { lat: (entry.bounds.south + entry.bounds.north) / 2, lng: (entry.bounds.west + entry.bounds.east) / 2 };
+      state.center = center;
+      map?.setCenter(center, 11);
+    }
+    state.bounds = map?.getBounds() || state.bounds;
+    state.center = map?.getCenter() || state.center;
     mapSearchPending = false;
     updateMapSearchButton();
-    const entry = state.manifest?.regions.find(region => String(region.code) === state.region);
-    if (entry?.bounds) { const bounds = entry.bounds; state.center = { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 }; map?.setCenter(state.center, 10); }
     await loadRegions();
   });
   $('listContent').addEventListener('click', event => {
