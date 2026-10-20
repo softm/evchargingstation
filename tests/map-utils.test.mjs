@@ -22,10 +22,10 @@ test('좌표가 없는 목록 항목을 지도에서 제외해도 마커 번호�
   const summaries = new Map([['B', { total: 4, available: 2, tone: 'available', label: '충전 대기 2 / 전체 4' }]]);
   const models = buildMarkerModels(stations, { selectedId: 'C', summaries });
   assert.deepEqual(models.map(model => [model.id, model.number, model.selected]), [['B', 2, false], ['C', 3, true]]);
-  assert.equal(models[0].count, '2/4');
+  assert.equal(models[0].count, '4기');
   assert.equal(models[0].tone, 'available');
   assert.equal(models[1].tone, 'unknown');
-  assert.equal(models[1].count, '?');
+  assert.equal(models[1].count, '—');
 });
 
 test('잘못된 상태 집계를 충전 가능 마커로 표시하지 않고 중복 ID를 한 번만 그린다', () => {
@@ -33,7 +33,7 @@ test('잘못된 상태 집계를 충전 가능 마커로 표시하지 않고 중
   const models = buildMarkerModels([station, { ...station }], { summaries: new Map([[station.id, { available: 3, total: 1, tone: 'available' }]]) });
   assert.equal(models.length, 1);
   assert.equal(models[0].tone, 'unknown');
-  assert.equal(models[0].count, '?');
+  assert.equal(models[0].count, '1기');
 });
 
 test('수집된 이름·ID·상태 문구는 HTML 속성과 본문으로 안전하게 표시한다', () => {
