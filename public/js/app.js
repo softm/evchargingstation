@@ -25,6 +25,40 @@ let mapSearchPending = false;
 let appliedBounds = null;
 let initialLocation = null;
 let locationFailure = '';
+let locationRequest = null;
+
+function requestLocation() {
+  if (locationRequest) return locationRequest;
+  if (typeof isSecureContext !== 'undefined' && !isSecureContext || !navigator.geolocation) return Promise.reject(new Error('브라우저 위치 기능을 사용할 수 없습니다. 지역을 직접 선택해 주세요.'));
+  locationRequest = new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(position => {
+      const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+      if (hasCoordinates(point)) resolve(point);
+      else reject(new Error('현재 위치 좌표가 올바르지 않습니다.'));
+    }, error => reject(new Error(error.code === 1
+      ? '위치 권한이 차단되어 있습니다. 브라우저의 사이트 위치 권한을 허용하거나 지역을 선택해 주세요.'
+      : error.code === 3 ? '위치 확인이 지연됩니다. 내 위치 버튼으로 재시도하거나 지역을 선택해 주세요.'
+      : '위치를 확인할 수 없습니다. 내 위치 버튼으로 재시도하거나 지역을 선택해 주세요.')),
+    { enableHighAccuracy: false, timeout: 11000, maximumAge: 60000 });
+  }).finally(() => { locationRequest = null; });
+  return locationRequest;
+}
+
+async function initialGeolocation() {
+  if (demo || sharedView || state.sharedId || state.region !== 'auto') return;
+  try {
+    const permission = await navigator.permissions?.query?.({ name: 'geolocation' }).catch(() => null);
+    if (permission?.state === 'denied') {
+      locationFailure = '위치 권한이 차단되어 있습니다. 내 위치 버튼 또는 지역 선택을 이용하세요.';
+      return;
+    }
+    const point = await requestLocation();
+    initialLocation = point;
+    state.center = point;
+    locationFailure = '';
+  } catch (error) { locationFailure = error.message || '위치 확인에 실패했습니다. 지역을 선택해 주세요.'; }
+}
+
 
 function updateMapSearchButton() {
   const button = $('searchThisArea');
@@ -400,6 +434,10 @@ async function initializeMap() {
     if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
     else if (sharedView) map.setCenter(sharedView.center, sharedView.zoom);
     else if (demo) map.setCenter({ lat: 37.5658, lng: 126.979 }, 14);
+    else if (initialLocation) map.locate(initialLocation);
+    appliedBounds = map.getBounds() || null;
+    state.bounds = appliedBounds;
+    mapSearchPending = false;
     render();
   } catch (error) { $('mapMessage').textContent = '지도를 불러오지 못했습니다. 충전소 목록에서 정보를 확인할 수 있습니다.'; $('mapMessage').hidden = false; }
 }
@@ -466,22 +504,26 @@ function bindEvents() {
   $('stationDialog').addEventListener('cancel', event => { event.preventDefault(); closeDetails(); });
   $('mapTab').addEventListener('click', () => setMobileView('map'));
   $('listTab').addEventListener('click', () => setMobileView('list'));
-  $('locateButton').addEventListener('click', () => {
-    if (!navigator.geolocation) { toast('이 브라우저에서는 위치 확인을 지원하지 않습니다.'); return; }
+  $('locateButton').addEventListener('click', async () => {
+    const revision = ++state.navigationRevision;
     $('locateButton').disabled = true;
-    const requestedRevision = ++state.navigationRevision;
-    navigator.geolocation.getCurrentPosition(position => {
-      $('locateButton').disabled = false;
-      if (requestedRevision !== state.navigationRevision) return;
-      state.center = { lat: position.coords.latitude, lng: position.coords.longitude };
-      state.region = 'auto'; $('regionSelect').value = 'auto'; map?.locate(state.center);
-      appliedBounds = map?.getBounds?.() || null;
-      if (appliedBounds) { state.bounds = appliedBounds; loadRegions(); }
+    try {
+      const point = await requestLocation();
+      if (revision !== state.navigationRevision) return;
+      state.center = point;
+      state.region = 'auto';
+      $('regionSelect').value = 'auto';
+      map?.locate(point);
+      appliedBounds = map?.getBounds() || null;
+      state.bounds = appliedBounds;
+      state.listLimit = 60;
       mapSearchPending = false;
-      updateMapSearchButton();
-      if (!map) { state.bounds = null; loadRegions(); }
-      toast('내 위치 주변의 충전소를 조회합니다.');
-    }, error => { $('locateButton').disabled = false; if (requestedRevision !== state.navigationRevision) return; toast(error.code === 1 ? '위치 권한을 허용하거나 지역을 직접 선택해 주세요.' : '현재 위치를 확인하지 못했습니다. 지역을 직접 선택해 주세요.'); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+      locationFailure = '';
+      await loadRegions();
+      toast('내 위치 주변 충전소를 조회했습니다.');
+    } catch (error) {
+      if (revision === state.navigationRevision) toast(error.message);
+    } finally { $('locateButton').disabled = false; updateMapSearchButton(); }
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !demo) refresh(); });
   window.addEventListener('storage', event => { if (event.key === favoriteKey) { state.favorites = readFavorites(); render(); } });
@@ -489,7 +531,9 @@ function bindEvents() {
 
 bindEvents();
 setMode();
-await Promise.allSettled([initializeMap(), refresh()]);
+await initialGeolocation();
+await initializeMap();
+await refresh();
 function startPolling() {
   clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (document.hidden) return; if (!demo) refresh(); else { render(); const station = currentStation(); if (station && $('stationDialog').open) renderDetails(station); } }, 60000);
