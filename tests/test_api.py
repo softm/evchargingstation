@@ -313,12 +313,12 @@ class NormalizationTests(unittest.TestCase):
         first = row(
             kind="A0", kindDetail="A001", trafficYn="Y",
             floorNum="B2", floorType="B", maker="충전기제조사",
-            year="2024", powerType="DC",
+            year="2024", powerType="DC", location="지하 2층 동쪽", addrDetail="A구역",
         )
         second = row(
             charger="03", kind="A0", kindDetail="A001", trafficYn="Y",
             floorNum="B3", floorType="B", maker="다른제조사",
-            year="2025", powerType="AC",
+            year="2025", powerType="AC", location="지하 3층 서쪽", addrDetail="B구역",
         )
         station = normalize_station("TEST001", [first, second])
         self.assertEqual(station["facilityKind"], "A0")
@@ -333,6 +333,10 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(charger["floorNumber"], "B2")
         self.assertEqual(charger["floorType"], "B")
         self.assertEqual(charger["powerType"], "DC")
+        self.assertEqual(charger["location"], "지하 2층 동쪽")
+        self.assertEqual(charger["detailAddress"], "A구역")
+        self.assertEqual(station["chargers"][1]["location"], "지하 3층 서쪽")
+        self.assertEqual(station["chargers"][1]["detailAddress"], "B구역")
         empty = normalize_station("UNKNOWN", [row()])
         self.assertIsNone(empty["convenienceProvided"])
         self.assertEqual(empty["chargers"][0]["manufacturer"], "")

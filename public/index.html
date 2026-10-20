@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="./css/app.css">
   <link rel="stylesheet" href="./css/layout.css">
   <link rel="stylesheet" href="./css/ads.css">
+  <link rel="stylesheet" href="./css/details.css">
   <script src="./config.js"></script>
   <script src="./ad-config.js"></script>
   <script type="module" src="./js/app.js"></script>
@@ -78,7 +79,7 @@
     <div id="extraFilters" class="extra-filters"><label class="select-wrap"><span>운영사</span><select id="operatorSelect" aria-label="충전 운영사"><option value="">전체 운영사</option></select></label><label class="select-wrap"><span>충전속도</span><select id="speedSelect" aria-label="충전속도"><option value="">전체 속도</option><option value="slow">완속 · 30 kW 미만</option><option value="medium">중속 · 30–49 kW</option><option value="fast50">급속 · 50–99 kW</option><option value="fast100">급속 · 100–199 kW</option><option value="ultra">초급속 · 200 kW 이상</option></select></label><label class="select-wrap"><span>충전 출력</span><select id="powerSelect" aria-label="최소 충전 출력"><option value="0">전체 출력</option><option value="50">50 kW 이상</option><option value="100">100 kW 이상</option><option value="200">200 kW 이상</option><option value="300">300 kW 이상</option></select></label><label class="checkbox-label"><input id="open24Check" type="checkbox">24시간 이용으로 등록된 곳</label><label class="checkbox-label"><input id="freeParkingCheck" type="checkbox">주차 무료로 등록된 곳</label></div>
     <div class="filter-dialog-footer"><button id="resetFilters" class="text-button" type="button">조건 초기화</button><button id="viewFilterResults" class="button primary" type="button">결과 보기</button></div>
   </dialog>
-  <dialog id="stationDialog" class="station-dialog" aria-labelledby="detailTitle"><div id="detailContent"></div></dialog>
+  <dialog id="stationDialog" class="station-dialog" data-map-obstacle aria-labelledby="detailTitle"><div id="detailContent"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <noscript><div class="noscript">충전소를 검색하려면 브라우저에서 JavaScript를 활성화해 주세요.</div></noscript>
 </body>

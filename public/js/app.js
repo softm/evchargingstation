@@ -4,7 +4,8 @@ import { BANNER_AFTER, mountAdBanner } from './ads.js';
 import { DataClient, selectViewportRegions } from './data.js';
 import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpen24, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl } from './domain.js';
 import { compareStations, nearbyAlternatives, estimateChargingCost } from './discovery.js';
-import { chargerFee, summarizeFees, feeLabel, facilityName, facilityDetailName } from './fees.js';
+import { facilityName, facilityDetailName } from './fees.js';
+import { stationFloors, statusSummaryHTML, chargerRowsHTML, chargingHelpHTML, tariffGuideHTML } from './station-details.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -506,34 +507,55 @@ function renderDetails(station) {
   const focusedHref = focused?.getAttribute('href');
   const scrollTop = dialog.scrollTop;
   const focusedInput = focused?.id;
+  const openSections = new Set(content.dataset.stationId === String(station.id)
+    ? [...content.querySelectorAll('details[open][data-detail-section]')].map(item => item.dataset.detailSection) : []);
   const region = stationRegion(station);
-  const summary = summarizeStation(station, region, DEFAULT_FILTERS, Date.now(), threshold());
   const phone = safePhone(station.phone);
   const restricted = station.restricted === true ? `이용 제한 있음${station.restrictionReason ? ` · ${station.restrictionReason}` : ''}` : station.restricted === false ? '이용 제한 없음으로 등록' : '이용 제한 여부 미확인';
-  const parking = station.parkingFree === true ? '주차 무료로 등록' : station.parkingFree === false ? '주차 유료로 등록' : '주차 요금 미확인';
-  const memberFee = demo ? null : summarizeFees(state.fees, station, 'member');
-  const guestFee = demo ? null : summarizeFees(state.fees, station, 'nonmember');
-  const priceSource = state.fees?.mode === 'licensed_publisher'
-    ? 'https://chargeinfo.ksga.org/front/fee/feeTable'
-    : 'https://ev.or.kr/nportal/evcarInfo/initEvcarChargePriceV2.do';
-  const tariffText = memberFee
-    ? `회원 참고요금 ${esc(feeLabel(memberFee))}${guestFee ? ` / 비회원 ${esc(feeLabel(guestFee))}` : ''} <small>(원/kWh, 출력·요금제에 따라 차이)</small><a href="${priceSource}" target="_blank" rel="noopener noreferrer">공식 요금 안내</a>`
-    : `요금 미확인 · <a href="${priceSource}" target="_blank" rel="noopener noreferrer">공식 사업자 요금표 확인</a>`;
+  const parking = station.parkingFree === true ? '주차 무료로 등록' : station.parkingFree === false ? '주차 유료로 등록 · 금액은 현장 확인' : '주차 요금 미확인';
   const facilityText = station.facilityKind
     ? `${esc(facilityName(station))}${station.facilityDetailCode ? ` · ${esc(facilityDetailName(station))}` : ''}`
     : '시설 유형 미확인';
-  const floors = [station.floorTypes, station.floorNumbers].filter(Boolean).map(esc).join(' · ') || '설치 층수 미등록';
   const convenience = station.convenienceProvided === true ? '편의제공 있음으로 등록 (종류 미확인)' : station.convenienceProvided === false ? '편의제공 없음으로 등록' : '편의제공 여부 미확인';
   const nav = hasCoordinates(station) && !demo;
   const naver = !demo ? `https://map.naver.com/p/search/${encodeURIComponent(station.address || station.name)}` : '';
   const kakao = nav ? `https://map.kakao.com/link/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}` : '';
-  const rows = (station.chargers || []).map(charger => {
-    const check = chargerState(charger, region, Date.now(), threshold());
-    const fee = demo ? null : chargerFee(state.fees, station, charger, 'member');
-    const maker = [charger.manufacturer, charger.installationYear ? `${charger.installationYear}년 설치` : '', charger.floorNumber ? `층 ${charger.floorNumber}` : ''].filter(Boolean).map(esc).join(' · ');
-    return `<div class="charger-row"><div class="charger-name">${esc(charger.id)}번 충전기 · ${esc(typeInfo(charger.type).name)}</div><span class="charger-status ${check.available ? 'available' : !check.fresh ? 'unknown' : ''}">${esc(check.label)}</span><div class="charger-meta">${chargerSpeed(charger) ? `${esc(SPEEDS[chargerSpeed(charger)].split(' · ')[0])} · ` : ''}${Number.isFinite(charger.outputKw) ? `${esc(charger.outputKw)} kW` : '출력 미확인'}${charger.method ? ` · ${esc(charger.method)}` : ''}${fee ? ` · 회원 참고요금 ${esc(feeLabel(fee))}` : ''}${maker ? `<br>${maker}` : ''}</div><div class="charger-times">상태 확인: <strong>${check.confirmedAt !== null ? formatTime(check.confirmedAt, true) : '확인 시각 없음'}</strong>${!check.fresh ? ` · 마지막 보고 ${esc(check.sourceLabel)}` : ''}<br>상태 변경: ${formatTime(charger.statusChangedAt, true)}${check.futureTimestamp ? '<br>일부 확인 시각이 현재보다 앞서 있어 신선도 판정에서 제외했습니다.' : ''}</div></div>`;
-  }).join('');
-  $('detailContent').innerHTML = `<div class="detail-top"><p class="detail-eyebrow">${demo ? 'DEMO · 가상 충전소' : 'CHARGING STATION'}</p><button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button><h2 id="detailTitle">${esc(station.name)}</h2><p class="detail-address">${esc(station.address || '주소 미확인')}${station.address ? `<button class="icon-button" type="button" data-action="copy-address" aria-label="주소 복사">${icon('copy')}</button>` : ''}${station.detailAddress ? `<br>${esc(station.detailAddress)}` : ''}</p><div class="detail-actions">${nav ? `<a class="button primary" href="${esc(naver)}" target="_blank" rel="noopener noreferrer">${icon('nav')}네이버 지도</a><a class="button" href="${esc(kakao)}" target="_blank" rel="noopener noreferrer">카카오 길찾기</a>` : `<button class="button" type="button" data-action="${demo ? 'demo-navigation' : 'missing-location'}">${icon('nav')}${demo ? '예시 위치' : '위치 미확인'}</button>`}<button class="button icon-only" type="button" data-action="detail-favorite" aria-label="${state.favorites.has(station.id) ? '저장 해제' : '충전소 저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button><button class="button icon-only" type="button" data-action="share" aria-label="충전소 공유">${icon('share')}</button></div></div>${demo ? '<div class="detail-demo"><strong>화면 체험용 가상 정보입니다.</strong><br>실제 충전소나 이용 가능한 충전 상태를 나타내지 않습니다.</div>' : ''}<section class="detail-section"><h3>충전기 현황</h3><div class="detail-stat"><div><span class="big-number">${summary.available}<small> / ${summary.total}기</small></span><p>${demo ? '예시 기준' : '최근 확인 기준'} 충전 대기</p></div>${icon('bolt')}</div><p class="detail-freshness">${Math.round(threshold() / 60)}분 이내 상태가 확인된 충전기만 충전 대기로 표시합니다.<br>커넥터 여러 개를 제공하는 충전기는 한 기로 계산합니다.${summary.stale ? `<br><strong>${summary.stale}기는 현재 상태를 다시 확인해야 합니다.</strong>` : ''}</p>${rows || '<p class="detail-freshness">등록된 충전기 정보가 없습니다.</p>'}</section><section class="detail-section"><h3>이용 안내</h3><dl class="detail-info"><dt>이용 시간</dt><dd>${esc(station.useTime || '운영 시간 미확인')}</dd><dt>설치 위치</dt><dd>${esc(station.location || '세부 위치 미확인')}</dd><dt>시설 유형</dt><dd>${facilityText}</dd><dt>설치 층수</dt><dd>${floors}</dd><dt>편의제공</dt><dd>${esc(convenience)}</dd><dt>이용 제한</dt><dd${station.restricted !== false ? ' class="warning"' : ''}>${esc(restricted)}</dd><dt>주차</dt><dd>${esc(parking)}</dd><dt>충전 요금</dt><dd>${demo ? '화면 체험용 · 요금 없음' : tariffText}</dd><dt>운영사</dt><dd>${esc(station.operatorName || '운영사 미확인')}</dd><dt>문의</dt><dd>${phone && !demo ? `<a href="tel:${esc(phone)}">${icon('phone')} ${esc(station.phone)}</a>` : '연락처 미확인'}</dd>${station.note ? `<dt>참고 사항</dt><dd>${esc(station.note)}</dd>` : ''}</dl></section>${costHTML(station)}${nearbyHTML(station)}<footer class="detail-foot"><p>${demo ? '가상 데이터 · 실제 이용 정보와 무관합니다.' : `출처: <a href="${esc(sourceUrl(state.manifest?.source?.url))}" target="_blank" rel="noopener noreferrer">한국환경공단 전기자동차 충전소 정보</a>`}</p><p>시설 정보 갱신: ${formatTime(region?.inventoryUpdatedAt, true)}<br>표시 시각은 한국 시간입니다.</p><p>대기 상태는 방문 시 달라질 수 있습니다. 이용 제한, 주차 요금과 충전 요금은 운영사 안내를 확인하세요.</p><span class="detail-id">충전소 ID ${esc(station.id)}</span></footer>`;
+  const now = Date.now();
+  const options = {now, threshold:threshold(), demo, formatTime};
+  content.innerHTML = `
+    <div class="detail-top"><p class="detail-eyebrow">${demo ? '화면 체험 · 가상 충전소' : esc(station.operatorName || '운영사 미확인')}</p>
+      <button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button>
+      <h2 id="detailTitle">${esc(station.name)}</h2>
+      <p class="detail-address">${esc(station.address || '주소 미확인')}${station.address ? `<button class="icon-button" type="button" data-action="copy-address" aria-label="주소 복사">${icon('copy')}</button>` : ''}${station.detailAddress ? `<br>${esc(station.detailAddress)}` : ''}</p>
+      <div class="detail-actions">${nav ? `<a class="button primary" href="${esc(naver)}" target="_blank" rel="noopener noreferrer">${icon('nav')}네이버 지도</a><a class="button" href="${esc(kakao)}" target="_blank" rel="noopener noreferrer">카카오 길찾기</a>` : `<button class="button" type="button" data-action="${demo ? 'demo-navigation' : 'missing-location'}">${icon('nav')}${demo ? '예시 위치' : '위치 미확인'}</button>`}
+        <button class="button icon-only" type="button" data-action="detail-favorite" aria-label="${state.favorites.has(station.id) ? '저장 해제' : '충전소 저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button>
+        <button class="button icon-only" type="button" data-action="share" aria-label="충전소 공유">${icon('share')}</button></div></div>
+    ${demo ? '<div class="detail-demo"><strong>화면 체험용 가상 정보입니다.</strong><br>실제 충전소나 이용 가능한 충전 상태를 나타내지 않습니다.</div>' : ''}
+    <section class="detail-section"><h3>방문 전 확인</h3><div class="visit-checks">
+      <span>${esc(isOpen24(station) ? '24시간 이용 등록' : station.useTime || '운영시간 미확인')}</span>
+      <span${station.parkingFree !== true ? ' class="warning"' : ''}>${esc(station.parkingFree === true ? '주차 무료 등록' : station.parkingFree === false ? '주차 유료 등록' : '주차료 미확인')}</span>
+      <span${station.restricted !== false ? ' class="warning"' : ''}>${esc(station.restricted === true ? '이용 대상 제한' : station.restricted === false ? '이용 제한 없음 등록' : '출입 조건 미확인')}</span></div>
+      <h3>충전 상태 한눈에</h3>${statusSummaryHTML(station, region, options)}</section>
+    <section class="detail-section"><div class="charger-section-heading"><h3>충전기별 정보</h3><span>전체 ${(station.chargers || []).length}기</span></div>
+      ${chargingHelpHTML(threshold())}${chargerRowsHTML(station, region, state.fees, options)}</section>
+    <section class="detail-section"><h3>요금 안내</h3>${demo ? '<p class="detail-explanation">화면 체험용 · 실제 요금이 아닙니다.</p>' : tariffGuideHTML(state.fees, station)}</section>
+    <section class="detail-section"><h3>시설·이용 안내</h3><dl class="detail-info">
+      <dt>운영시간</dt><dd>${esc(station.useTime || '운영시간 미확인')}</dd>
+      <dt>설치 위치</dt><dd class="info-multiline">${esc(station.location || '세부 위치 미확인')}</dd>
+      <dt>설치 층수</dt><dd>${esc(stationFloors(station))}</dd>
+      <dt>시설 유형</dt><dd>${facilityText}</dd><dt>편의제공</dt><dd>${esc(convenience)}</dd>
+      <dt>이용 제한</dt><dd${station.restricted !== false ? ' class="warning"' : ''}>${esc(restricted)}</dd>
+      <dt>주차 요금</dt><dd>${esc(parking)}</dd><dt>충전 요금</dt><dd>${demo ? '가상 예시 · 요금 없음' : '위의 충전기별 회원·비회원 요금 안내 참고'}</dd>
+      <dt>운영사</dt><dd>${esc(station.operatorName || '운영사 미확인')}</dd>
+      <dt>문의 전화</dt><dd>${phone && !demo ? `<a href="tel:${esc(phone)}">${icon('phone')} ${esc(station.phone)}</a>` : '연락처 미확인'}</dd>
+      ${station.note ? `<dt>참고 사항</dt><dd class="info-multiline">${esc(station.note)}</dd>` : ''}</dl>
+      ${!demo ? '<p class="detail-explanation"><a class="official-fee" href="https://www.ev.or.kr/nportal/monitor/evMap.do" target="_blank" rel="noopener noreferrer">공식 지도에서 충전소명으로 검색 ↗</a></p>' : ''}</section>
+    ${costHTML(station)}${nearbyHTML(station)}
+    <footer class="detail-foot"><p>${demo ? '가상 데이터 · 실제 이용 정보와 무관합니다.' : `출처: <a href="${esc(sourceUrl(state.manifest?.source?.url))}" target="_blank" rel="noopener noreferrer">한국환경공단 전기자동차 충전소 정보</a>`}</p>
+      <p>시설 정보 갱신: ${formatTime(region?.inventoryUpdatedAt, true)}<br>표시 시각은 한국 시간입니다.</p>
+      <p>충전 상태와 이용 조건은 현장과 다를 수 있습니다. 방문 전 운영사 안내를 확인하세요.</p><span class="detail-id">충전소 ID ${esc(station.id)}</span></footer>`;
+  content.dataset.stationId = String(station.id);
+  for (const detail of content.querySelectorAll('details[data-detail-section]')) detail.open = openSections.has(detail.dataset.detailSection);
   if (dialog.open) {
     if (focusedInput) $(focusedInput)?.focus({preventScroll:true});
     if (focusedAction || focusedHref) {

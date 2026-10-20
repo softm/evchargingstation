@@ -23,10 +23,10 @@ async function get(resource, json = false) {
 }
 
 async function verify() {
-  const [html, build, manifest, fees, app, css, statusPage, statusScript, statusCss, layoutCss, ads, adCss, adConfig, privacy] = await Promise.all([
+  const [html, build, manifest, fees, app, css, statusPage, statusScript, statusCss, layoutCss, ads, adCss, adConfig, privacy, detailScript, detailCss] = await Promise.all([
     get('./'), get('build-info.json', true), get('data/manifest.json', true), get('data/fees.json', true), get('js/app.js'), get('css/app.css'),
     get('data-status.html'), get('js/data-status.js'), get('css/data-status.css'), get('css/layout.css'),
-    get('js/ads.js'), get('css/ads.css'), get('ad-config.js'), get('privacy.html')
+    get('js/ads.js'), get('css/ads.css'), get('ad-config.js'), get('privacy.html'), get('js/station-details.js'), get('css/details.css')
   ]);
   if (!html.includes('id="appLayout"') || !html.includes('./js/app.js')) throw new Error('Published root is not the charging app.');
   if (!build.sourceRevision) throw new Error('Published build has no source revision.');
@@ -34,6 +34,11 @@ async function verify() {
   if (!app.includes('new DataClient(') || !css.includes('.app-layout')) throw new Error('Published application assets are missing.');
   if (!html.includes('./css/layout.css') || !html.includes('id="filterDialog"') || !layoutCss.includes('.filter-dialog')) {
     throw new Error('Published sidebar layout or filter panel assets are missing.');
+  }
+  if (!html.includes('./css/details.css') || !detailScript.includes('stationStatusCounts')
+      || !detailScript.includes('chargerRowsHTML') || !detailCss.includes('.detail-status-grid')
+      || !app.includes('chargingHelpHTML') || !statusPage.includes('id="tariffSummary"')) {
+    throw new Error('Published charging detail guidance or tariff coverage assets are missing.');
   }
   const adUnit = adConfig.match(/"unit"\s*:\s*"([^"]*)"/)?.[1];
   if (!html.includes('id="adfitBanner"') || !html.includes('./ad-config.js') || !html.includes('./css/ads.css')

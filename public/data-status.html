@@ -22,6 +22,7 @@
       <section class="panel"><h2>전송 용량</h2><div id="storageSummary" class="storage"></div><p class="hint">지역 파일은 필요한 지역만 내려받아 브라우저에서 gzip을 해제합니다. 아래 표를 여는 것만으로 전국 파일을 내려받지 않습니다.</p></section>
       <section class="panel"><div class="section-heading"><div><h2>지역별 수집 결과</h2><p class="hint">건수는 수집 요약 기준입니다. ‘파일 검사’를 누르면 실제 파일을 받아 해제하고 건수를 대조합니다.</p></div><a id="manifestLink" href="./data/manifest.json" target="_blank" rel="noopener">수집 요약 JSON ↗</a></div><div class="table-scroll" role="region" aria-label="지역별 수집 결과 표" tabindex="0"><table><caption class="sr-only">지역별 충전소·충전기 수와 압축 용량 및 파일 검사 결과</caption><thead><tr><th scope="col">지역</th><th scope="col">충전소</th><th scope="col">충전기</th><th scope="col">원본 용량</th><th scope="col">전송 용량</th><th scope="col">형식</th><th scope="col">실제 파일 검사</th></tr></thead><tbody id="regionRows"></tbody></table></div></section>
       <section id="warningsPanel" class="panel" hidden><h2>확인이 필요한 항목</h2><ul id="warningsList"></ul></section>
+      <section class="panel"><h2>요금 자료 연결 현황</h2><div id="tariffSummary"></div><p class="hint">사업자별 요금 자료에 연결된 항목만 충전소 상세에 표시합니다. 미확인 요금은 무료가 아니며, 충전기별 실시간 결제단가는 현재 연결되어 있지 않습니다. <a href="./data/fees.json">요금 자료 JSON 보기</a></p></section>
       <footer><p><a href="https://www.data.go.kr/data/15076352/openapi.do" target="_blank" rel="noopener">출처: 한국환경공단 공공데이터 ↗</a></p><p id="pageCheckedAt"></p></footer>
     </div>
     <noscript><p class="notice">수집 결과를 표시하려면 JavaScript를 활성화해 주세요. <a href="./data/manifest.json">수집 요약 JSON 보기</a></p></noscript>

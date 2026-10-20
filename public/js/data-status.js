@@ -16,7 +16,7 @@ async function buildInfo() {
   } catch { return {}; }
 }
 
-function render(manifest, build) {
+function render(manifest, build, fees) {
   const result = summarizeCollection(manifest);
   const warnings = (manifest.warnings || []).map(warning => `수집 알림: ${warning.code || 'UNKNOWN'}`);
   const problems = [...result.problems, ...warnings];
@@ -43,6 +43,8 @@ function render(manifest, build) {
   $('warningsPanel').hidden = !problems.length;
   $('warningsList').innerHTML = problems.map(problem => `<li>${esc(problem)}</li>`).join('');
   $('pageCheckedAt').textContent = `이 화면에서 결과를 읽은 시각: ${time(new Date().toISOString())}`;
+  const rates = (fees?.operators || []).flatMap(operator => operator.rates || []);
+  $('tariffSummary').innerHTML = fees ? `<p>연결 운영사 <strong>${number(fees.operators.length)}개</strong> · 회원 요금 항목 ${number(rates.filter(rate => rate.membership === 'member').length)}건 · 비회원 요금 항목 ${number(rates.filter(rate => rate.membership === 'nonmember').length)}건</p><p class="hint">출처: ${esc(fees.source?.name || '미확인')}<br>수집 확인 시각: ${time(fees.collectedAt)} · ${fees.collectedAt ? '요금표 확인 시각이며 실제 결제 보장이 아닙니다.' : '공표 기준 자료 · 자동 수집 확인 시각 미등록'}</p>` : '<p class="hint">요금 자료를 확인하지 못했습니다. 충전소·충전기 수집 결과는 위에서 확인하세요.</p>';
   $('statusContent').hidden = false;
 }
 
@@ -51,9 +53,9 @@ async function refresh() {
   $('regionRows').querySelectorAll('button').forEach(button => {button.disabled = true;});
   $('loadStatus').textContent = '게시된 수집 결과를 다시 확인하고 있습니다.';
   try {
-    const [manifest, build] = await Promise.all([client.manifest(), buildInfo()]);
+    const [manifest, build, fees] = await Promise.all([client.manifest(), buildInfo(), client.fees().catch(() => null)]);
     currentManifest = manifest;
-    render(manifest, build);
+    render(manifest, build, fees);
   } catch {
     $('loadStatus').className = 'notice error';
     $('loadStatus').textContent = currentManifest ? '최신 결과를 읽지 못했습니다. 아래에는 이전에 읽은 결과를 유지합니다. 현황 새로고침을 다시 눌러 주세요.' : '수집 결과를 읽지 못했습니다. 연결 상태를 확인하고 현황 새로고침을 눌러 주세요.';
