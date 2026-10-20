@@ -479,28 +479,52 @@ function bindEvents() {
   $('stationDialog').addEventListener('cancel', event => { event.preventDefault(); closeDetails(); });
   $('mapTab').addEventListener('click', () => setMobileView('map'));
   $('listTab').addEventListener('click', () => setMobileView('list'));
-  $('locateButton').addEventListener('click', () => {
-    if (!navigator.geolocation) { toast('이 브라우저에서는 위치 확인을 지원하지 않습니다.'); return; }
+  $('locateButton').addEventListener('click', async () => {
     $('locateButton').disabled = true;
     const requestedRevision = ++state.navigationRevision;
-    navigator.geolocation.getCurrentPosition(position => {
-      $('locateButton').disabled = false;
-      if (requestedRevision !== state.navigationRevision) return;
-      state.center = { lat: position.coords.latitude, lng: position.coords.longitude };
-      state.region = 'auto'; $('regionSelect').value = 'auto'; map?.locate(state.center);
-      mapSearchPending = true;
-      updateMapSearchButton();
-      if (!map) { state.bounds = null; loadRegions(); }
-      toast('내 위치 주변의 충전소를 조회합니다.');
-    }, error => { $('locateButton').disabled = false; if (requestedRevision !== state.navigationRevision) return; toast(error.code === 1 ? '위치 권한을 허용하거나 지역을 직접 선택해 주세요.' : '현재 위치를 확인하지 못했습니다. 지역을 직접 선택해 주세요.'); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+    const result = await getBrowserLocation();
+    $('locateButton').disabled = false;
+    if (requestedRevision !== state.navigationRevision) return;
+    if (!result.point) { toast(locationMessage(result.reason)); return; }
+    state.locationPoint = result.point;
+    state.center = result.point;
+    state.region = 'auto'; state.sharedId = null; state.listLimit = 60;
+    $('regionSelect').value = 'auto';
+    if (map) {
+      map.locate(result.point);
+      state.bounds = map.getBounds();
+      state.center = map.getCenter();
+    }
+    $('mapMessage').hidden = true;
+    mapSearchPending = false;
+    updateMapSearchButton();
+    await loadRegions();
+    $('listContent').scrollTop = 0;
+    toast('내 위치 주변의 충전소를 조회했습니다.');
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !demo) refresh(); });
   window.addEventListener('storage', event => { if (event.key === favoriteKey) { state.favorites = readFavorites(); render(); } });
 }
 
+async function initializeUserLocation() {
+  // A user-selected region, shared link, or demo remains authoritative.
+  if (demo || sharedView || state.region !== 'auto' || state.sharedId) return;
+  const result = await getBrowserLocation();
+  if (result.point) {
+    state.locationPoint = result.point;
+    state.center = result.point;
+  } else {
+    $('mapMessage').textContent = locationMessage(result.reason);
+    $('mapMessage').hidden = false;
+  }
+}
+
 bindEvents();
 setMode();
-await Promise.allSettled([initializeMap(), refresh()]);
+// Resolve permission once; then center the map; then fetch the matching regions.
+await initializeUserLocation();
+await initializeMap();
+await refresh();
 function startPolling() {
   clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (document.hidden) return; if (!demo) refresh(); else { render(); const station = currentStation(); if (station && $('stationDialog').open) renderDetails(station); } }, 60000);
