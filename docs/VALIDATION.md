@@ -1,5 +1,15 @@
 # 구현과 배포 검증 기록
 
+## 2026-10-20 — 최초 전국 실데이터 수집 및 gzip 전송 구조
+
+- 공식 승인키 수정 후 전국 53페이지·API 53회로 충전소 **100,497곳**, 충전기 **522,849대**를 실제 수집했다.
+- [최초 수집 성공 로그](https://github.com/softm/evchargingstation/actions/runs/39348930525)는 수집과 빌드는 성공했으나, 같은 워크플로 재실행에 `github-pages` 아티팩트가 2개 생성되어 게시가 실패했다.
+- [고유 아티팩트명 수정본 배포](https://github.com/softm/evchargingstation/actions/runs/39363450494)는 수집·빌드·GitHub Pages 배포가 모두 성공했다. 빌드 기준 저장된 총계는 동일하다.
+- 새 정적 빌드에서는 지역별 원본 JSON의 전송용 파일을 `.json.gz`로 압축하도록 구현했다. `scripts/compress-data.mjs`, `public/js/data.js`, `scripts/verify-deployment.mjs`, `tests/compression.test.mjs`를 확인한다.
+- gzip 구조의 실제 운영 게시 여부와 압축률 수치는 별도 배포 실행 이후 검증 결과를 업데이트한다. 원본 데이터는 바꾸지 않으며, 자동 상태 갱신은 활성화하지 않았다.
+
+---
+
 ## 2026-10-20 — 실제 API 인증 오류 진단과 배포 정책 보완
 
 검증 대상은 [`cf3f55e66612aae2613fcb54e9080bb94ddef980`](https://github.com/softm/evchargingstation/commit/cf3f55e66612aae2613fcb54e9080bb94ddef980)의 배포본입니다. 아래의 이전 시각별 기록은 당시 결과이며, 현재 상태는 이 절을 기준으로 확인합니다.
