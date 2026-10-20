@@ -54,12 +54,19 @@ export class DataClient {
   async region(entry, { force = false, signal } = {}) {
     const code = String(entry.code);
     const cacheKey = `${code}:${entry.path}`;
-    if (!force && this.cache.has(cacheKey)) return this.cache.get(cacheKey);
+    if (!force && this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey);
+      this.cache.delete(cacheKey);
+      this.cache.set(cacheKey, cached);
+      return cached;
+    }
     const data = await this.request(entry.path, signal);
     if (!Array.isArray(data.stations) || String(data.regionCode) !== code) throw new Error('지역 충전소 정보를 확인할 수 없습니다.');
     const normalized = { ...data, regionCode: code, stations: data.stations.map(station => ({ ...station, id: String(station.id), regionCode: String(station.regionCode), chargers: (station.chargers || []).map(charger => ({ ...charger, id: String(charger.id), type: String(charger.type).padStart(2, '0'), status: String(charger.status ?? '0') })) })) };
     for (const key of this.cache.keys()) if (key.startsWith(`${code}:`) && key !== cacheKey) this.cache.delete(key);
     this.cache.set(cacheKey, normalized);
+    // Limit memory when users pan across many provinces. Fetches can reuse the HTTP cache.
+    while (this.cache.size > 4) this.cache.delete(this.cache.keys().next().value);
     return normalized;
   }
 }
