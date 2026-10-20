@@ -28,5 +28,5 @@ const manifest = JSON.parse(await readFile(path.join(output, 'data/manifest.json
 if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Invalid data manifest');
 const compression = await compressRegionFiles(path.join(output, 'data'), manifest);
 await writeFile(path.join(output, 'data/manifest.json'), JSON.stringify(manifest) + '\n');
-await writeFile(path.join(output, 'build-info.json'), JSON.stringify({version:'0.1.0',builtAt:new Date().toISOString(),sourceRevision:process.env.GITHUB_SHA||null,dataMode:manifest.mode},null,2)+'\n');
+await writeFile(path.join(output, 'build-info.json'), JSON.stringify({version:'0.1.0',builtAt:new Date().toISOString(),sourceRevision:process.env.GITHUB_SHA||null,dataMode:manifest.mode,scheduledCollectionEnabled:process.env.SCHEDULED_COLLECTION_ENABLED==='true'},null,2)+'\n');
 console.log(`Built dist/ — ${manifest.mode}, ${manifest.totalStations || 0} stations. Region bytes ${compression.originalBytes} -> ${compression.publishedBytes}, gzip ${compression.gzipRegions}/${compression.regions}. No API secret is bundled.`);

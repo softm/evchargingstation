@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { gunzipSync } from 'node:zlib';
+import { summarizeCollection } from '../public/js/data-status-model.js';
 
 const rawUrl = process.env.DEPLOYMENT_URL || process.argv[2];
 if (!rawUrl) throw new Error('Set DEPLOYMENT_URL or provide the published app URL.');
@@ -21,15 +22,20 @@ async function get(resource, json = false) {
 }
 
 async function verify() {
-  const [html, build, manifest, fees, app, css] = await Promise.all([
-    get('./'), get('build-info.json', true), get('data/manifest.json', true),
-    get('data/fees.json', true), get('js/app.js'), get('css/app.css')
+  const [html, build, manifest, fees, app, css, statusPage, statusScript, statusCss] = await Promise.all([
+    get('./'), get('build-info.json', true), get('data/manifest.json', true), get('data/fees.json', true), get('js/app.js'), get('css/app.css'),
+    get('data-status.html'), get('js/data-status.js'), get('css/data-status.css')
   ]);
   if (!html.includes('id="appLayout"') || !html.includes('./js/app.js')) throw new Error('Published root is not the charging app.');
   if (!build.sourceRevision) throw new Error('Published build has no source revision.');
   if (expectedRevision && build.sourceRevision !== expectedRevision) throw new Error('Published revision does not match this workflow.');
   if (!app.includes('new DataClient(') || !css.includes('.app-layout')) throw new Error('Published application assets are missing.');
   if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Published data manifest is invalid.');
+  if (!html.includes('./data-status.html') || !statusPage.includes('id="dataSummary"')
+      || !statusPage.includes('./js/data-status.js') || !statusScript.includes('summarizeCollection')
+      || !statusCss.includes('.metrics')) throw new Error('Mandatory data status page or its entry link/assets are missing.');
+  if (summarizeCollection(manifest).problems.length) throw new Error('Published collection totals do not match regional results.');
+  if (typeof build.scheduledCollectionEnabled !== 'boolean') throw new Error('Published collection schedule setting is missing.');
   if (fees.schemaVersion !== 1 || fees.currency !== 'KRW' || fees.unit !== 'kWh' || !Array.isArray(fees.operators)
       || fees.operators.some(operator => !operator.operatorId || !Array.isArray(operator.rates))) {
     throw new Error('Published tariff guidance JSON is invalid.');

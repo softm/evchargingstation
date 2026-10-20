@@ -1,7 +1,8 @@
 import { createMap, parseSharedView } from './map.js';
 import { DataClient, selectViewportRegions } from './data.js';
+import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpen24, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl, powerBand, POWER_BANDS } from './domain.js';
+import { compareStations, nearbyAlternatives, estimateChargingCost } from './discovery.js';
 import { chargerFee, summarizeFees, feeLabel, facilityName, facilityDetailName } from './fees.js';
-import { DEFAULT_FILTERS, chargerState, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl, powerBand, POWER_BANDS } from './domain.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -12,7 +13,7 @@ const config = window.EV_CONFIG || {};
 const client = new DataClient(config);
 const demo = params.get('demo') === '1';
 const favoriteKey = demo ? 'evchargingstation:demo-favorites:v1' : 'evchargingstation:favorites:v1';
-const sharedFilters = { query: (params.get('q') || '').slice(0, 200), connector: ['combo', 'ac', 'nacs', 'chademo', 'ac3', 'combo2'].includes(params.get('connector')) ? params.get('connector') : '', minPower: [50, 100, 200, 300].includes(Number(params.get('kw'))) ? Number(params.get('kw')) : 0, available: params.get('available') === '1', unrestricted: params.get('public') === '1', freeParking: params.get('parking') === '1', sort: ['available', 'distance', 'name'].includes(params.get('sort')) ? params.get('sort') : 'available' };
+const sharedFilters = { query: (params.get('q') || '').slice(0, 200), connector: ['combo', 'ac', 'nacs', 'chademo', 'ac3', 'combo2'].includes(params.get('connector')) ? params.get('connector') : '', minPower: [50, 100, 200, 300].includes(Number(params.get('kw'))) ? Number(params.get('kw')) : 0, available: params.get('available') === '1', unrestricted: params.get('public') === '1', freeParking: params.get('parking') === '1', speed: Object.hasOwn(SPEEDS,params.get('speed')) ? params.get('speed') : '', operator: (params.get('operator') || '').slice(0,160), open24: params.get('open24') === '1', sort: ['available', 'distance', 'name', 'count', 'power'].includes(params.get('sort')) ? params.get('sort') : 'available' };
 const state = { manifest: null, fees: null, regions: new Map(), activeCodes: [], filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || 'auto', bounds: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: sharedView?.center || { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
 let map = null;
 let preserveSelectedView = false;
@@ -22,6 +23,15 @@ let inputTimer;
 let refreshTimer;
 let demoRegion;
 let mapSearchPending = false;
+const costDrafts = new Map();
+
+function fillOperators(stations) {
+  const operators = new Map(stations.map(station => [operatorKey(station), station.operatorName || station.operatorId]).filter(([key]) => key));
+  if (state.filters.operator && !operators.has(state.filters.operator)) operators.set(state.filters.operator, '선택한 운영사 · 현재 지역에 없음');
+  const html = '<option value="">전체 운영사</option>' + [...operators].sort((a,b) => String(a[1]).localeCompare(String(b[1]),'ko')).map(([key,label]) => `<option value="${esc(key)}">${esc(label)}</option>`).join('');
+  if ($('operatorSelect').innerHTML !== html) $('operatorSelect').innerHTML = html;
+  $('operatorSelect').value = state.filters.operator;
+}
 let appliedBounds = null;
 let initialLocation = null;
 let locationFailure = '';
@@ -131,10 +141,12 @@ function updateControls() {
   $('connectorSelect').value = state.filters.connector;
   $('powerSelect').value = String(state.filters.minPower);
   $('freeParkingCheck').checked = state.filters.freeParking;
+  $('open24Check').checked = state.filters.open24;
+  $('speedSelect').value = state.filters.speed;
   $('sortSelect').value = state.filters.sort;
   $('searchInput').value = state.filters.query;
   $('clearSearch').hidden = !state.filters.query;
-  const count = Number(Boolean(state.filters.minPower)) + Number(state.filters.freeParking);
+  const count = Number(Boolean(state.filters.minPower)) + Number(state.filters.freeParking) + Number(state.filters.open24) + Number(Boolean(state.filters.speed)) + Number(Boolean(state.filters.operator));
   $('extraFilterCount').textContent = count;
   $('extraFilterCount').hidden = !count;
   $('refreshButton').disabled = state.loading;
@@ -178,7 +190,7 @@ function stationCard(station, index) {
   const bands = [...new Set((station.chargers || []).map(charger => powerBand(charger.outputKw)).filter(Boolean))];
   const connectors = connectorNames.length > 2 ? `${connectorNames.slice(0, 2).join(' · ')} 외` : connectorNames.join(' · ');
   const availability = summary.available > 0 ? `<b>${summary.available}</b>기 충전 대기 <small>/ ${summary.matching}기${summary.matching !== summary.total ? ' 조건 일치' : ''}</small>` : summary.unknown ? '현재 상태 확인 필요' : '충전 대기 없음';
-  return `<article class="station-card${state.selectedId === station.id ? ' selected' : ''}" data-station-id="${esc(station.id)}" data-tone="${summary.tone}"><span class="station-number" aria-hidden="true">${index + 1}</span><div class="station-main"><button type="button" class="station-name" data-action="select" data-id="${esc(station.id)}">${esc(station.name)}</button><p class="station-address">${esc(station.address || '주소 미확인')}</p><div class="card-status-row"><span class="availability ${summary.tone}">${availability}</span><span class="card-distance">${Number.isFinite(dist) ? `${dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`}` : '위치 미확인'}</span></div><div class="card-tags">${summary.maxPower ? `<span class="power-tag">최대 ${esc(summary.maxPower)} kW</span>` : ''}<span>${esc(connectors || '커넥터 미확인')}</span>${station.restricted === true ? '<span class="warning-tag">이용 제한</span>' : ''}${station.parkingFree === true ? '<span>주차 무료 등록</span>' : ''}${bands.map(band => `<span class="power-band band-${band}">${esc(POWER_BANDS[band])}</span>`).join('')}${summary.hasBusOnly ? '<span class="warning-tag">버스 전용 포함</span>' : ''}</div><p class="card-update">${demo ? '가상 예시 · ' : ''}${relativeTime(mostRecent)}${summary.stale && confirmed.length ? ' · 일부 충전기 확인 지연' : ''}</p></div><button type="button" class="card-save" data-action="favorite" data-id="${esc(station.id)}" aria-label="${esc(station.name)} ${state.favorites.has(station.id) ? '저장 해제' : '저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button></article>`;
+  return `<article class="station-card${state.selectedId === station.id ? ' selected' : ''}" data-station-id="${esc(station.id)}" data-tone="${summary.tone}"><span class="station-number" aria-hidden="true">${index + 1}</span><div class="station-main"><button type="button" class="station-name" data-action="select" data-id="${esc(station.id)}">${esc(station.name)}</button><p class="station-address">${esc(station.address || '주소 미확인')}</p><div class="card-status-row"><span class="availability ${summary.tone}">${availability}</span><span class="card-distance">${Number.isFinite(dist) ? `${dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`}` : '위치 미확인'}</span></div><div class="card-tags"><span>총 ${summary.total}기</span>${station.operatorName ? `<span>${esc(station.operatorName)}</span>` : ''}${isOpen24(station) ? '<span>24시간</span>' : ''}${summary.maxPower ? `<span class="power-tag">최대 ${esc(summary.maxPower)} kW</span>` : ''}<span>${esc(connectors || '커넥터 미확인')}</span>${station.restricted === true ? '<span class="warning-tag">이용 제한</span>' : ''}${station.parkingFree === true ? '<span>주차 무료 등록</span>' : ''}${bands.map(band => `<span class="power-band band-${band}">${esc(POWER_BANDS[band])}</span>`).join('')}${summary.hasBusOnly ? '<span class="warning-tag">버스 전용 포함</span>' : ''}</div><p class="card-update">${demo ? '가상 예시 · ' : ''}${relativeTime(mostRecent)}${summary.stale && confirmed.length ? ' · 일부 충전기 확인 지연' : ''}</p></div><button type="button" class="card-save" data-action="favorite" data-id="${esc(station.id)}" aria-label="${esc(station.name)} ${state.favorites.has(station.id) ? '저장 해제' : '저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button></article>`;
 }
 
 function render() {
@@ -188,17 +200,11 @@ function render() {
   const scopedStations = state.region === 'auto' && appliedBounds
     ? stations.filter(station => insideMapBounds(station, appliedBounds))
     : stations;
+  fillOperators(scopedStations);
   const now = Date.now();
   state.summaries = new Map(scopedStations.map(station => [station.id, summarizeStation(station, stationRegion(station), state.filters, now, threshold())]));
   state.visible = filterStations(scopedStations, state.regions, state.filters, state.favorites, now, threshold());
-  state.visible.sort((a, b) => {
-    if (state.filters.sort === 'name') return a.name.localeCompare(b.name, 'ko');
-    if (state.filters.sort === 'available') {
-      const delta = state.summaries.get(b.id).available - state.summaries.get(a.id).available;
-      if (delta) return delta;
-    }
-    return distanceKm(state.center, a) - distanceKm(state.center, b) || a.name.localeCompare(b.name, 'ko');
-  });
+  state.visible.sort((a,b) => compareStations(a,b,state.filters.sort,state.summaries,state.center));
   $('resultCount').textContent = state.manifest ? state.visible.length.toLocaleString('ko-KR') : '—';
   $('scopeLabel').textContent = scopeLabel();
   const shown = state.visible.slice(0, state.listLimit);
@@ -311,6 +317,8 @@ function resetFilters() {
   state.filters = { ...DEFAULT_FILTERS };
   state.listLimit = 60;
   render();
+  const station = currentStation();
+  if (station && $('stationDialog').open) renderDetails(station);
 }
 
 function changeFilters(patch) {
@@ -318,6 +326,30 @@ function changeFilters(patch) {
   state.listLimit = 60;
   render();
   $('listContent').scrollTop = 0;
+  const station = currentStation();
+  if (station && $('stationDialog').open) renderDetails(station);
+}
+
+function nearbyHTML(station) {
+  const alternatives = nearbyAlternatives(station,allStations(),state.regions,state.filters,Date.now(),threshold());
+  return `<section class="detail-section"><h3>인근 대안 충전소</h3><p class="detail-freshness">현재 불러온 지역에서 직선거리 5 km 이내 · 선택한 커넥터·속도·이용 조건 기준</p>${alternatives.length ? alternatives.map(candidate => {
+    const summary = summarizeStation(candidate,stationRegion(candidate),state.filters,Date.now(),threshold());
+    const distance = distanceKm(station,candidate);
+    return `<button type="button" class="nearby-station" data-action="nearby" data-id="${esc(candidate.id)}"><strong>${esc(candidate.name)}</strong><span>${distance < 1 ? `${Math.round(distance*1000)} m` : `${distance.toFixed(1)} km`} · ${summary.matching}기 조건 일치 · ${esc(summary.label)}</span><small>${candidate.restricted === true ? '이용 제한 있음' : candidate.restricted === false ? '이용 제한 없음으로 등록' : '출입 조건 확인 필요'} · ${candidate.parkingFree === true ? '주차 무료 등록' : '주차 요금 확인'}</small></button>`;
+  }).join('') : '<p class="detail-freshness">현재 불러온 범위에 조건이 맞는 대안이 없습니다. 지역 또는 조건을 조정해 보세요.</p>'}</section>`;
+}
+
+function costHTML(station) {
+  const draft = costDrafts.get(station.id) || {energy:'20',price:''};
+  return `<section class="detail-section"><h3>충전 요금 확인·예상 비용</h3><p class="detail-freshness">회원·비회원·로밍·출력 구간에 따라 요금이 달라집니다. 운영사에서 확인한 단가를 입력하세요.</p><a class="official-fee" href="https://ev.or.kr/nportal/evcarInfo/initEvcarChargePriceV2.do" target="_blank" rel="noopener noreferrer">공식 요금표·로밍 조건 확인 ↗</a><div class="cost-fields"><label>충전량 (kWh)<input id="costEnergy" type="number" inputmode="decimal" min="0.1" max="1000" step="0.1" value="${esc(draft.energy)}"></label><label>확인한 단가 (원/kWh)<input id="costPrice" type="number" inputmode="decimal" min="0.1" max="5000" step="0.1" placeholder="직접 입력" value="${esc(draft.price)}"></label></div><output id="costResult" class="cost-result" for="costEnergy costPrice" aria-live="polite"></output><p class="detail-freshness">입력한 단가 × 충전량의 참고값입니다. 주차비·로밍 할증·할인은 포함하지 않습니다.</p></section>`;
+}
+
+function updateCost() {
+  const energy = $('costEnergy'), price = $('costPrice');
+  if (!energy || !price) return;
+  costDrafts.set(state.selectedId,{energy:energy.value,price:price.value});
+  const value = estimateChargingCost(energy.value,price.value);
+  $('costResult').textContent = value === null ? '충전량과 단가를 입력하면 예상 비용을 표시합니다.' : `예상 충전 비용 ${value.toLocaleString('ko-KR')}원`;
 }
 
 function favorite(id) {
@@ -365,6 +397,7 @@ function renderDetails(station) {
   const focusedAction = focused?.dataset.action;
   const focusedHref = focused?.getAttribute('href');
   const scrollTop = dialog.scrollTop;
+  const focusedInput = focused?.id;
   const region = stationRegion(station);
   const summary = summarizeStation(station, region, DEFAULT_FILTERS, Date.now(), threshold());
   const phone = safePhone(station.phone);
@@ -390,16 +423,18 @@ function renderDetails(station) {
     const check = chargerState(charger, region, Date.now(), threshold());
     const fee = demo ? null : chargerFee(state.fees, station, charger, 'member');
     const maker = [charger.manufacturer, charger.installationYear ? `${charger.installationYear}년 설치` : '', charger.floorNumber ? `층 ${charger.floorNumber}` : ''].filter(Boolean).map(esc).join(' · ');
-    return `<div class="charger-row"><div class="charger-name">${esc(charger.id)}번 충전기 · ${esc(typeInfo(charger.type).name)}</div><span class="charger-status ${check.available ? 'available' : !check.fresh ? 'unknown' : ''}">${esc(check.label)}</span><div class="charger-meta">${Number.isFinite(charger.outputKw) ? `${esc(charger.outputKw)} kW` : '출력 미확인'}${charger.method ? ` · ${esc(charger.method)}` : ''}${fee ? ` · 회원 참고요금 ${esc(feeLabel(fee))}` : ''}${maker ? `<br>${maker}` : ''}</div><div class="charger-times">상태 확인: <strong>${check.confirmedAt !== null ? formatTime(check.confirmedAt, true) : '확인 시각 없음'}</strong>${!check.fresh ? ` · 마지막 보고 ${esc(check.sourceLabel)}` : ''}<br>상태 변경: ${formatTime(charger.statusChangedAt, true)}${check.futureTimestamp ? '<br>일부 확인 시각이 현재보다 앞서 있어 신선도 판정에서 제외했습니다.' : ''}</div></div>`;
+    return `<div class="charger-row"><div class="charger-name">${esc(charger.id)}번 충전기 · ${esc(typeInfo(charger.type).name)}</div><span class="charger-status ${check.available ? 'available' : !check.fresh ? 'unknown' : ''}">${esc(check.label)}</span><div class="charger-meta">${chargerSpeed(charger) ? `${esc(SPEEDS[chargerSpeed(charger)].split(' · ')[0])} · ` : ''}${Number.isFinite(charger.outputKw) ? `${esc(charger.outputKw)} kW` : '출력 미확인'}${charger.method ? ` · ${esc(charger.method)}` : ''}${fee ? ` · 회원 참고요금 ${esc(feeLabel(fee))}` : ''}${maker ? `<br>${maker}` : ''}</div><div class="charger-times">상태 확인: <strong>${check.confirmedAt !== null ? formatTime(check.confirmedAt, true) : '확인 시각 없음'}</strong>${!check.fresh ? ` · 마지막 보고 ${esc(check.sourceLabel)}` : ''}<br>상태 변경: ${formatTime(charger.statusChangedAt, true)}${check.futureTimestamp ? '<br>일부 확인 시각이 현재보다 앞서 있어 신선도 판정에서 제외했습니다.' : ''}</div></div>`;
   }).join('');
-  $('detailContent').innerHTML = `<div class="detail-top"><p class="detail-eyebrow">${demo ? 'DEMO · 가상 충전소' : 'CHARGING STATION'}</p><button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button><h2 id="detailTitle">${esc(station.name)}</h2><p class="detail-address">${esc(station.address || '주소 미확인')}${station.address ? `<button class="icon-button" type="button" data-action="copy-address" aria-label="주소 복사">${icon('copy')}</button>` : ''}${station.detailAddress ? `<br>${esc(station.detailAddress)}` : ''}</p><div class="detail-actions">${nav ? `<a class="button primary" href="${esc(naver)}" target="_blank" rel="noopener noreferrer">${icon('nav')}네이버 지도</a><a class="button" href="${esc(kakao)}" target="_blank" rel="noopener noreferrer">카카오 길찾기</a>` : `<button class="button" type="button" data-action="${demo ? 'demo-navigation' : 'missing-location'}">${icon('nav')}${demo ? '예시 위치' : '위치 미확인'}</button>`}<button class="button icon-only" type="button" data-action="detail-favorite" aria-label="${state.favorites.has(station.id) ? '저장 해제' : '충전소 저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button><button class="button icon-only" type="button" data-action="share" aria-label="충전소 공유">${icon('share')}</button></div></div>${demo ? '<div class="detail-demo"><strong>화면 체험용 가상 정보입니다.</strong><br>실제 충전소나 이용 가능한 충전 상태를 나타내지 않습니다.</div>' : ''}<section class="detail-section"><h3>충전기 현황</h3><div class="detail-stat"><div><span class="big-number">${summary.available}<small> / ${summary.total}기</small></span><p>${demo ? '예시 기준' : '최근 확인 기준'} 충전 대기</p></div>${icon('bolt')}</div><p class="detail-freshness">${Math.round(threshold() / 60)}분 이내 상태가 확인된 충전기만 충전 대기로 표시합니다.<br>커넥터 여러 개를 제공하는 충전기는 한 기로 계산합니다.${summary.stale ? `<br><strong>${summary.stale}기는 현재 상태를 다시 확인해야 합니다.</strong>` : ''}</p>${rows || '<p class="detail-freshness">등록된 충전기 정보가 없습니다.</p>'}</section><section class="detail-section"><h3>이용 안내</h3><dl class="detail-info"><dt>이용 시간</dt><dd>${esc(station.useTime || '운영 시간 미확인')}</dd><dt>설치 위치</dt><dd>${esc(station.location || '세부 위치 미확인')}</dd><dt>시설 유형</dt><dd>${facilityText}</dd><dt>설치 층수</dt><dd>${floors}</dd><dt>편의제공</dt><dd>${esc(convenience)}</dd><dt>이용 제한</dt><dd${station.restricted !== false ? ' class="warning"' : ''}>${esc(restricted)}</dd><dt>주차</dt><dd>${esc(parking)}</dd><dt>충전 요금</dt><dd>${demo ? '화면 체험용 · 요금 없음' : tariffText}</dd><dt>운영사</dt><dd>${esc(station.operatorName || '운영사 미확인')}</dd><dt>문의</dt><dd>${phone && !demo ? `<a href="tel:${esc(phone)}">${icon('phone')} ${esc(station.phone)}</a>` : '연락처 미확인'}</dd>${station.note ? `<dt>참고 사항</dt><dd>${esc(station.note)}</dd>` : ''}</dl></section><footer class="detail-foot"><p>${demo ? '가상 데이터 · 실제 이용 정보와 무관합니다.' : `출처: <a href="${esc(sourceUrl(state.manifest?.source?.url))}" target="_blank" rel="noopener noreferrer">한국환경공단 전기자동차 충전소 정보</a>`}</p><p>시설 정보 갱신: ${formatTime(region?.inventoryUpdatedAt, true)}<br>표시 시각은 한국 시간입니다.</p><p>대기 상태는 방문 시 달라질 수 있습니다. 이용 제한, 주차 요금과 충전 요금은 운영사 안내를 확인하세요.</p><span class="detail-id">충전소 ID ${esc(station.id)}</span></footer>`;
+  $('detailContent').innerHTML = `<div class="detail-top"><p class="detail-eyebrow">${demo ? 'DEMO · 가상 충전소' : 'CHARGING STATION'}</p><button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button><h2 id="detailTitle">${esc(station.name)}</h2><p class="detail-address">${esc(station.address || '주소 미확인')}${station.address ? `<button class="icon-button" type="button" data-action="copy-address" aria-label="주소 복사">${icon('copy')}</button>` : ''}${station.detailAddress ? `<br>${esc(station.detailAddress)}` : ''}</p><div class="detail-actions">${nav ? `<a class="button primary" href="${esc(naver)}" target="_blank" rel="noopener noreferrer">${icon('nav')}네이버 지도</a><a class="button" href="${esc(kakao)}" target="_blank" rel="noopener noreferrer">카카오 길찾기</a>` : `<button class="button" type="button" data-action="${demo ? 'demo-navigation' : 'missing-location'}">${icon('nav')}${demo ? '예시 위치' : '위치 미확인'}</button>`}<button class="button icon-only" type="button" data-action="detail-favorite" aria-label="${state.favorites.has(station.id) ? '저장 해제' : '충전소 저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button><button class="button icon-only" type="button" data-action="share" aria-label="충전소 공유">${icon('share')}</button></div></div>${demo ? '<div class="detail-demo"><strong>화면 체험용 가상 정보입니다.</strong><br>실제 충전소나 이용 가능한 충전 상태를 나타내지 않습니다.</div>' : ''}<section class="detail-section"><h3>충전기 현황</h3><div class="detail-stat"><div><span class="big-number">${summary.available}<small> / ${summary.total}기</small></span><p>${demo ? '예시 기준' : '최근 확인 기준'} 충전 대기</p></div>${icon('bolt')}</div><p class="detail-freshness">${Math.round(threshold() / 60)}분 이내 상태가 확인된 충전기만 충전 대기로 표시합니다.<br>커넥터 여러 개를 제공하는 충전기는 한 기로 계산합니다.${summary.stale ? `<br><strong>${summary.stale}기는 현재 상태를 다시 확인해야 합니다.</strong>` : ''}</p>${rows || '<p class="detail-freshness">등록된 충전기 정보가 없습니다.</p>'}</section><section class="detail-section"><h3>이용 안내</h3><dl class="detail-info"><dt>이용 시간</dt><dd>${esc(station.useTime || '운영 시간 미확인')}</dd><dt>설치 위치</dt><dd>${esc(station.location || '세부 위치 미확인')}</dd><dt>시설 유형</dt><dd>${facilityText}</dd><dt>설치 층수</dt><dd>${floors}</dd><dt>편의제공</dt><dd>${esc(convenience)}</dd><dt>이용 제한</dt><dd${station.restricted !== false ? ' class="warning"' : ''}>${esc(restricted)}</dd><dt>주차</dt><dd>${esc(parking)}</dd><dt>충전 요금</dt><dd>${demo ? '화면 체험용 · 요금 없음' : tariffText}</dd><dt>운영사</dt><dd>${esc(station.operatorName || '운영사 미확인')}</dd><dt>문의</dt><dd>${phone && !demo ? `<a href="tel:${esc(phone)}">${icon('phone')} ${esc(station.phone)}</a>` : '연락처 미확인'}</dd>${station.note ? `<dt>참고 사항</dt><dd>${esc(station.note)}</dd>` : ''}</dl></section>${costHTML(station)}${nearbyHTML(station)}<footer class="detail-foot"><p>${demo ? '가상 데이터 · 실제 이용 정보와 무관합니다.' : `출처: <a href="${esc(sourceUrl(state.manifest?.source?.url))}" target="_blank" rel="noopener noreferrer">한국환경공단 전기자동차 충전소 정보</a>`}</p><p>시설 정보 갱신: ${formatTime(region?.inventoryUpdatedAt, true)}<br>표시 시각은 한국 시간입니다.</p><p>대기 상태는 방문 시 달라질 수 있습니다. 이용 제한, 주차 요금과 충전 요금은 운영사 안내를 확인하세요.</p><span class="detail-id">충전소 ID ${esc(station.id)}</span></footer>`;
   if (dialog.open) {
+    if (focusedInput) $(focusedInput)?.focus({preventScroll:true});
     if (focusedAction || focusedHref) {
       const replacement = [...content.querySelectorAll('button[data-action], a[href]')].find(element => focusedAction ? element.dataset.action === focusedAction : element.getAttribute('href') === focusedHref);
       replacement?.focus({ preventScroll: true });
     }
     dialog.scrollTop = scrollTop;
   }
+  updateCost();
 }
 
 async function copyText(text, success = '복사했습니다.') {
@@ -418,6 +453,9 @@ async function shareStation(station) {
   if (state.filters.query) url.searchParams.set('q', state.filters.query);
   if (state.filters.connector) url.searchParams.set('connector', state.filters.connector);
   if (state.filters.minPower) url.searchParams.set('kw', state.filters.minPower);
+  if (state.filters.speed) url.searchParams.set('speed', state.filters.speed);
+  if (state.filters.operator) url.searchParams.set('operator', state.filters.operator);
+  if (state.filters.open24) url.searchParams.set('open24', '1');
   if (state.filters.available) url.searchParams.set('available', '1');
   if (state.filters.unrestricted) url.searchParams.set('public', '1');
   if (state.filters.freeParking) url.searchParams.set('parking', '1');
@@ -483,6 +521,9 @@ function bindEvents() {
   $('clearSearch').addEventListener('click', () => { clearTimeout(inputTimer); changeFilters({ query: '' }); $('searchInput').focus(); });
   $('connectorSelect').addEventListener('change', event => changeFilters({ connector: event.target.value }));
   $('powerSelect').addEventListener('change', event => changeFilters({ minPower: Number(event.target.value) }));
+  $('speedSelect').addEventListener('change', event => changeFilters({ speed: event.target.value }));
+  $('operatorSelect').addEventListener('change', event => changeFilters({ operator: event.target.value }));
+  $('open24Check').addEventListener('change', event => changeFilters({ open24: event.target.checked }));
   $('sortSelect').addEventListener('change', event => changeFilters({ sort: event.target.value }));
   $('freeParkingCheck').addEventListener('change', event => changeFilters({ freeParking: event.target.checked }));
   $('availableToggle').addEventListener('click', () => changeFilters({ available: !state.filters.available }));
@@ -529,6 +570,22 @@ function bindEvents() {
     if (event.target === $('stationDialog')) { const rect = $('stationDialog').getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDetails(); return; }
     const button = event.target.closest('[data-action]'); if (!button) return;
     if (button.dataset.action === 'close') { closeDetails(); return; }
+    if (button.dataset.action === 'nearby') {
+      clearTimeout(inputTimer);
+      state.filters = {...state.filters,query:'',favorites:false};
+      state.listLimit = 60;
+      const target = allStations().find(item => String(item.id) === button.dataset.id);
+      if (state.region === 'auto' && target && hasCoordinates(target)) {
+        appliedBounds = initialVisibleBounds(target, null, Math.max(16, map?.getZoom?.() || 16));
+        state.bounds = appliedBounds;
+        state.center = {lat:target.lat,lng:target.lng};
+        mapSearchPending = false;
+        updateMapSearchButton();
+      }
+      selectStation(button.dataset.id);
+      $('stationDialog').scrollTop = 0;
+      return;
+    }
     const station = currentStation(); if (!station) return;
     if (button.dataset.action === 'detail-favorite') favorite(station.id);
     else if (button.dataset.action === 'copy-address') await copyText(station.address, '주소를 복사했습니다.');
@@ -536,6 +593,7 @@ function bindEvents() {
     else if (button.dataset.action === 'demo-navigation') toast('실제 방문 장소가 없는 가상 예시입니다.');
     else if (button.dataset.action === 'missing-location') toast('위치 좌표를 확인할 수 없는 충전소입니다.');
   });
+  $('stationDialog').addEventListener('input', event => {if (['costEnergy','costPrice'].includes(event.target.id)) updateCost();});
   $('stationDialog').addEventListener('cancel', event => { event.preventDefault(); closeDetails(); });
   $('mapTab').addEventListener('click', () => setMobileView('map'));
   $('listTab').addEventListener('click', () => setMobileView('list'));

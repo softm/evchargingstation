@@ -22,13 +22,15 @@ for(const file of await walk(root)) {
   }
   if(/\.json$/.test(file)) JSON.parse(await readFile(file,'utf8'));
 }
-const html=await readFile(path.join(root,'public/index.html'),'utf8');
+for (const page of ['index.html', 'data-status.html']) {
+const html=await readFile(path.join(root,'public',page),'utf8');
 for(const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
   const src=match[1];
   if(!src || /^(?:https?:|tel:|mailto:|#|data:)/.test(src)) continue;
   const clean=src.split(/[?#]/)[0];
   if(!clean) continue;
   await access(path.join(root,'public',clean));
+}
 }
 const manifest=JSON.parse(await readFile(path.join(root,'public/data/manifest.json'),'utf8'));
 if(!['unconfigured','snapshot','live','demo'].includes(manifest.mode)) throw new Error('Unrecognized data mode');

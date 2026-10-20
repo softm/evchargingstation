@@ -17,6 +17,25 @@ export const TYPES = Object.freeze({
   '11': { name: 'DC콤보2(버스 전용)', connectors: ['combo2'], busOnly: true },
 });
 
+export const DEFAULT_FILTERS = Object.freeze({ query: '', connector: '', minPower: 0, speed: '', operator: '', open24: false, available: false, unrestricted: false, freeParking: false, favorites: false, sort: 'available' });
+
+export const SPEEDS = Object.freeze({ slow: '완속 · 30 kW 미만', medium: '중속 · 30–49 kW', fast50: '급속 · 50–99 kW', fast100: '급속 · 100–199 kW', ultra: '초급속 · 200 kW 이상' });
+
+export function chargerSpeed(charger) {
+  const power = charger.outputKw;
+  if (typeof power !== 'number' || !Number.isFinite(power) || power <= 0) return '';
+  return power < 30 ? 'slow' : power < 50 ? 'medium' : power < 100 ? 'fast50' : power < 200 ? 'fast100' : 'ultra';
+}
+
+export function operatorKey(station) {
+  return station.operatorId ? `id:${station.operatorId}` : station.operatorName ? `name:${normalizedText(station.operatorName)}` : '';
+}
+
+export function isOpen24(station) {
+  // Ambiguous exceptions and partial-day schedules must not become 24-hour access.
+  const hours = normalizedText(station.useTime).replace(/\s/g, '');
+  return /^(?:24시간(?:이용가능|운영|연중무휴)?|연중무휴24시간|00:00[~～–-](?:24:00|00:00))$/.test(hours);
+}
 export function powerBand(kw) {
   const power = Number(kw);
   if (!Number.isFinite(power) || power <= 0) return null;
@@ -26,7 +45,6 @@ export const POWER_BANDS = Object.freeze({
   slow: '완속(~30kW)', medium: '중속(30~50kW)', fast: '급속(50~100kW)',
   fastPlus: '급속+(100~200kW)', ultra: '초급속(200kW~)'
 });
-export const DEFAULT_FILTERS = Object.freeze({ query: '', connector: '', minPower: 0, available: false, unrestricted: false, freeParking: false, favorites: false, sort: 'available' });
 
 export function typeInfo(type) {
   const code = String(type ?? '').padStart(2, '0');
@@ -56,6 +74,7 @@ export function chargerState(charger, region, now = Date.now(), threshold = 600)
 
 export function chargerMatches(charger, filters = DEFAULT_FILTERS, region, now = Date.now(), threshold = 600) {
   if (filters.connector && !typeInfo(charger.type).connectors.includes(filters.connector)) return false;
+  if (filters.speed && chargerSpeed(charger) !== filters.speed) return false;
   const minimum = Number(filters.minPower) || 0;
   if (minimum > 0 && (charger.outputKw === null || charger.outputKw === undefined || !Number.isFinite(Number(charger.outputKw)) || Number(charger.outputKw) < minimum)) return false;
   if (filters.available && !chargerState(charger, region, now, threshold).available) return false;
@@ -87,6 +106,8 @@ export function filterStations(stations, regions, filters, favorites = new Set()
   const query = normalizedText(filters.query);
   return stations.filter(station => {
     if (filters.favorites && !favorites.has(String(station.id))) return false;
+    if (filters.operator && operatorKey(station) !== filters.operator) return false;
+    if (filters.open24 && !isOpen24(station)) return false;
     if (filters.unrestricted && station.restricted !== false) return false;
     if (filters.freeParking && station.parkingFree !== true) return false;
     if (query && !normalizedText([station.name, station.address, station.detailAddress, station.operatorName].join(' ')).includes(query)) return false;

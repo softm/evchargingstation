@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#087f64">
+  <meta name="description" content="충전한눈의 실제 데이터 수집 결과, 지역별 건수, 확인 시각과 gzip 압축 용량을 확인하세요.">
+  <title>데이터 수집 현황 · 충전한눈</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/data-status.css">
+  <script src="./config.js"></script>
+  <script type="module" src="./js/data-status.js"></script>
+</head>
+<body>
+  <header><a class="brand" href="./"><img src="./icon.svg" alt="" width="32" height="32">충전한눈</a><a href="./">충전소 지도 →</a></header>
+  <main>
+    <div class="page-heading"><div><p class="eyebrow">DATA COLLECTION</p><h1>데이터 수집 현황</h1><p class="intro">현재 서비스에 게시된 실제 수집 결과입니다.</p></div><button id="refreshStatus" type="button">현황 새로고침</button></div>
+    <p id="loadStatus" class="notice" role="status" aria-live="polite">수집 결과를 확인하고 있습니다.</p>
+    <div id="statusContent" hidden>
+      <section class="metrics" aria-label="수집 요약" id="dataSummary"></section>
+      <section class="panel"><h2>수집과 갱신</h2><dl id="collectionDetails" class="details"></dl><p class="hint">현황 새로고침은 게시된 결과를 다시 읽습니다. 공공 API 재수집을 실행하지 않습니다. 상태 변경 시각과 수집 확인 시각은 다르며, 오래된 상태는 현재 충전 대기로 집계하지 않습니다.</p></section>
+      <section class="panel"><h2>전송 용량</h2><div id="storageSummary" class="storage"></div><p class="hint">지역 파일은 필요한 지역만 내려받아 브라우저에서 gzip을 해제합니다. 아래 표를 여는 것만으로 전국 파일을 내려받지 않습니다.</p></section>
+      <section class="panel"><div class="section-heading"><div><h2>지역별 수집 결과</h2><p class="hint">건수는 수집 요약 기준입니다. ‘파일 검사’를 누르면 실제 파일을 받아 해제하고 건수를 대조합니다.</p></div><a id="manifestLink" href="./data/manifest.json" target="_blank" rel="noopener">수집 요약 JSON ↗</a></div><div class="table-scroll" role="region" aria-label="지역별 수집 결과 표" tabindex="0"><table><caption class="sr-only">지역별 충전소·충전기 수와 압축 용량 및 파일 검사 결과</caption><thead><tr><th scope="col">지역</th><th scope="col">충전소</th><th scope="col">충전기</th><th scope="col">원본 용량</th><th scope="col">전송 용량</th><th scope="col">형식</th><th scope="col">실제 파일 검사</th></tr></thead><tbody id="regionRows"></tbody></table></div></section>
+      <section id="warningsPanel" class="panel" hidden><h2>확인이 필요한 항목</h2><ul id="warningsList"></ul></section>
+      <footer><p><a href="https://www.data.go.kr/data/15076352/openapi.do" target="_blank" rel="noopener">출처: 한국환경공단 공공데이터 ↗</a></p><p id="pageCheckedAt"></p></footer>
+    </div>
+    <noscript><p class="notice">수집 결과를 표시하려면 JavaScript를 활성화해 주세요. <a href="./data/manifest.json">수집 요약 JSON 보기</a></p></noscript>
+  </main>
+</body>
+</html>
