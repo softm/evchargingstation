@@ -61,8 +61,8 @@ export function createViewportGate() {
 
 export const markerScale = zoom => zoom < 14 ? 'dot' : zoom < 16 ? 'pin' : zoom < 18 ? 'name' : 'detail';
 export const labelBudget = (zoom, width = 800, height = 600) => {
-  const cap = zoom < 12 ? 6 : zoom < 14 ? 12 : zoom < 16 ? 24 : 40;
-  return Math.max(1, Math.min(cap, Math.floor(Math.max(1, width) * Math.max(1, height) / (zoom < 14 ? 32000 : zoom < 16 ? 24000 : 16000))));
+  const cap = zoom < 14 ? 0 : zoom < 16 ? 16 : 40;
+  return Math.max(0, Math.min(cap, Math.floor(Math.max(1, width) * Math.max(1, height) / (zoom < 14 ? 32000 : zoom < 16 ? 24000 : 16000))));
 };
 const nonNegativeCount = value => Number.isInteger(value) && value >= 0 ? value : null;
 
@@ -130,8 +130,8 @@ export function selectMarkerModels(stations, bounds, { selectedId, summaries = n
 /** SOFTM-EV-MARKER-CULL END */
 
 export function markerHtml(model) {
-  const description = `${model.number}. ${model.station.name || '이름 미제공 충전소'}. ${model.label}`;
-  return `<button type="button" class="ev-map-pin ev-map-pin--${model.tone}${model.selected ? ' is-selected' : ''}" data-station-id="${escapeHtml(model.id)}" aria-label="${escapeHtml(description)}" aria-pressed="${model.selected}" title="${escapeHtml(description)}"><span class="ev-map-pin-number">${model.number}</span><span class="ev-map-pin-count" aria-hidden="true">${escapeHtml(model.count)}</span><span class="ev-map-pin-label" aria-hidden="true" hidden>${escapeHtml(model.station.name || '이름 미제공 충전소')}</span></button>`;
+  const description = `${model.station.name || '이름 미제공 충전소'} · ${model.count} · ${model.label}`;
+  return `<button type="button" class="ev-map-pin ev-map-pin--${model.tone}${model.selected ? ' is-selected' : ''}" data-station-id="${escapeHtml(model.id)}" aria-label="${escapeHtml(description)}" aria-pressed="${model.selected}" title="${escapeHtml(description)}"><span class="ev-map-pin-glyph" aria-hidden="true">⚡</span><span class="ev-map-pin-count" aria-hidden="true">${escapeHtml(model.count)}</span><span class="ev-map-pin-label" aria-hidden="true" hidden>${escapeHtml(model.station.name || '이름 미제공 충전소')}</span></button>`;
 }
 
 function mapError(code, message, recoverable = true) {
@@ -209,16 +209,16 @@ function installStyles() {
     .ev-map-tools{position:absolute;top:var(--ev-map-controls-top,84px);right:12px;z-index:800;display:grid;gap:1px;overflow:hidden;border:1px solid #d5dfdb;border-radius:12px;box-shadow:0 3px 14px #18342a16}
     .ev-map-tools button{display:grid;place-items:center;width:44px;height:44px;margin:0;padding:0;border:0;background:white;color:#193c30;font:500 24px/1 system-ui;cursor:pointer}
     .ev-map-tools button:hover{background:#f1f7f4}.ev-map-tools button:focus-visible,.ev-map-pin:focus-visible{outline:3px solid #1590df;outline-offset:3px}
-    .ev-leaflet-icon{background:transparent;border:0}.ev-map-pin{position:relative;display:flex;align-items:center;gap:5px;min-width:64px;height:40px;padding:4px 7px 4px 4px;overflow:visible;border:2px solid white;border-radius:22px;background:#718078;color:white;box-shadow:0 2px 5px #123a2840;cursor:pointer;font:700 12px/1.2 system-ui,sans-serif;white-space:nowrap}
+    .ev-leaflet-icon{background:transparent;border:0}.ev-map-pin{position:relative;display:flex;align-items:center;gap:5px;min-width:36px;height:40px;padding:4px 7px 4px 4px;overflow:visible;border:2px solid white;border-radius:22px;background:#718078;color:white;box-shadow:0 2px 5px #123a2840;cursor:pointer;font:700 12px/1.2 system-ui,sans-serif;white-space:nowrap}
     .ev-map-pin:after{content:"";position:absolute;bottom:-6px;left:calc(50% - 5px);width:8px;height:8px;background:inherit;border-right:2px solid white;border-bottom:2px solid white;transform:rotate(45deg)}
-    .ev-map-pin--available{background:#078769}.ev-map-pin--busy{background:#b96b29}.ev-map-pin--unknown{background:#67796f}
-    .ev-map-pin-number{display:grid;place-items:center;flex:none;min-width:25px;height:25px;border-radius:50%;background:white;color:#143e30;font-size:12px}
+    .ev-map-pin--available{background:#078769}.ev-map-pin--busy{background:#bd7825}.ev-map-pin--unknown{background:#727c83}
+    .ev-map-pin-glyph{display:grid;place-items:center;flex:none;width:26px;height:26px;border-radius:50%;background:white;color:#245247;font-size:16px;line-height:1}
     .ev-map-pin-count{font-size:12px;letter-spacing:-.2px}.ev-map-pin.is-selected{outline:3px solid #164937;outline-offset:2px;box-shadow:0 0 0 7px #ffffffc9,0 5px 16px #163f3040}
     .ev-map-pin-label{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);max-width:220px;padding:6px 9px;overflow:hidden;text-overflow:ellipsis;border:1px solid #dce7e1;border-radius:8px;background:#fffffff5;color:#1b3b2c;font:600 12px/1.35 system-ui,sans-serif;box-shadow:0 2px 8px #153e2814;pointer-events:none}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected){width:15px;min-width:15px;height:15px;min-height:15px;padding:0;gap:0;border-width:2px;border-radius:50%}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected)::after{display:none}
-    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-number,.ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){min-width:42px;padding-right:5px;gap:0}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-glyph,.ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){width:34px;min-width:34px;height:34px;padding:3px;gap:0;border-radius:50%}
     .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
     .ev-map-pin.is-selected .ev-map-pin-label{max-width:240px;font-size:14px;font-weight:800;border:2px solid #087f64;background:#effcf6;color:#075842;padding:8px 11px}
     .ev-map-pin-label[hidden]{display:none}.ev-map-current{width:18px;height:18px;border:3px solid white;border-radius:50%;background:#287de0;box-shadow:0 0 0 7px #287de025,0 2px 5px #14366244}
