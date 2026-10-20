@@ -27,6 +27,19 @@ let initialLocation = null;
 let locationFailure = '';
 let locationRequest = null;
 
+/** Handle hidden/zero-size maps and asynchronous SDK centering at startup. */
+function initialVisibleBounds(center, sdkBounds, zoom = 14) {
+  if (hasCoordinates(center) && sdkBounds
+    && ['south', 'north', 'west', 'east'].every(key => Number.isFinite(sdkBounds[key]))
+    && sdkBounds.north > sdkBounds.south + 0.0005
+    && sdkBounds.east > sdkBounds.west + 0.0005
+    && center.lat >= sdkBounds.south && center.lat <= sdkBounds.north
+    && center.lng >= sdkBounds.west && center.lng <= sdkBounds.east) return sdkBounds;
+  const radius = zoom >= 16 ? 0.03 : zoom >= 14 ? 0.065 : 0.16;
+  return { south: center.lat - radius, north: center.lat + radius,
+    west: center.lng - radius * 1.5, east: center.lng + radius * 1.5 };
+}
+
 function requestLocation() {
   if (locationRequest) return locationRequest;
   if (typeof isSecureContext !== 'undefined' && !isSecureContext || !navigator.geolocation) return Promise.reject(new Error('브라우저 위치 기능을 사용할 수 없습니다. 지역을 직접 선택해 주세요.'));
@@ -435,8 +448,13 @@ async function initializeMap() {
     else if (sharedView) map.setCenter(sharedView.center, sharedView.zoom);
     else if (demo) map.setCenter({ lat: 37.5658, lng: 126.979 }, 14);
     else if (initialLocation) map.locate(initialLocation);
-    appliedBounds = map.getBounds() || null;
+    else if (!selected && !sharedView && !demo) map.setCenter(state.center, 14);
+    // Some SDKs report the previous (Seoul) bounds while moving to a newly
+    // acquired user position. Never use those bounds for the first data load.
+    const requestedCenter = initialLocation || sharedView?.center || map.getCenter() || state.center;
+    appliedBounds = initialVisibleBounds(requestedCenter, map.getBounds(), map.getZoom());
     state.bounds = appliedBounds;
+    state.center = requestedCenter;
     mapSearchPending = false;
     render();
   } catch (error) { $('mapMessage').textContent = '지도를 불러오지 못했습니다. 충전소 목록에서 정보를 확인할 수 있습니다.'; $('mapMessage').hidden = false; }
@@ -514,7 +532,7 @@ function bindEvents() {
       state.region = 'auto';
       $('regionSelect').value = 'auto';
       map?.locate(point);
-      appliedBounds = map?.getBounds() || null;
+      appliedBounds = initialVisibleBounds(point, map?.getBounds(), map?.getZoom());
       state.bounds = appliedBounds;
       state.listLimit = 60;
       mapSearchPending = false;
@@ -531,6 +549,9 @@ function bindEvents() {
 
 bindEvents();
 setMode();
+// On mobile the default list tab hides the SDK canvas (zero geometry).
+// Show the map before creating it, as in the care-map mobile flow.
+if (window.matchMedia?.('(max-width:760px)').matches) setMobileView('map');
 await initialGeolocation();
 await initializeMap();
 await refresh();
