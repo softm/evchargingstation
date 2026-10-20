@@ -43,6 +43,10 @@
 
   <main class="app-layout" id="appLayout">
     <aside class="sidebar" aria-label="충전소 검색">
+      <div id="selectionToolbar" class="selection-toolbar" hidden>
+        <div class="selection-toolbar-title"><small>지도에서 선택한 충전소</small><strong id="selectionStationName"></strong></div>
+        <button id="selectionShowSearch" class="selection-show-search" type="button" aria-label="접힌 검색 및 필터 펼치기">검색·필터 보기</button>
+      </div>
       <section class="search-panel">
         <div class="section-eyebrow">FIND YOUR NEXT CHARGE</div>
         <h1>가까운 충전소, <span>한눈에.</span></h1>

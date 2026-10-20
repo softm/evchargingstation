@@ -1,4 +1,5 @@
 import { createMap, parseSharedView } from './map.js';
+import { revealSelectedCard } from './selection.js';
 import { DataClient, selectViewportRegions } from './data.js';
 import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpen24, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl, powerBand, POWER_BANDS } from './domain.js';
 import { compareStations, nearbyAlternatives, estimateChargingCost } from './discovery.js';
@@ -23,6 +24,31 @@ let inputTimer;
 let refreshTimer;
 let demoRegion;
 let mapSearchPending = false;
+let selectedListFrame = 0;
+
+function sidebarSelectionFocus(station) {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar || !station) return;
+  sidebar.classList.add('station-selection-focused');
+  $('selectionToolbar').hidden = false;
+  $('selectionStationName').textContent = station.name || '이름 미제공 충전소';
+}
+
+function clearSidebarSelectionFocus() {
+  document.querySelector('.sidebar')?.classList.remove('station-selection-focused');
+  $('selectionToolbar').hidden = true;
+  $('selectionStationName').textContent = '';
+  cancelAnimationFrame(selectedListFrame);
+  selectedListFrame = 0;
+}
+
+function queueSelectedListReveal(id) {
+  cancelAnimationFrame(selectedListFrame);
+  selectedListFrame = requestAnimationFrame(() => {
+    selectedListFrame = 0;
+    if (state.selectedId === String(id)) revealSelectedCard($('listContent'), id);
+  });
+}
 const costDrafts = new Map();
 
 function fillOperators(stations) {
@@ -191,7 +217,7 @@ function stationCard(station, index) {
   const bands = [...new Set((station.chargers || []).map(charger => powerBand(charger.outputKw)).filter(Boolean))];
   const connectors = connectorNames.length > 2 ? `${connectorNames.slice(0, 2).join(' · ')} 외` : connectorNames.join(' · ');
   const availability = summary.available > 0 ? `<b>${summary.available}</b>기 충전 대기 <small>/ ${summary.matching}기${summary.matching !== summary.total ? ' 조건 일치' : ''}</small>` : summary.unknown ? '현재 상태 확인 필요' : '충전 대기 없음';
-  return `<article class="station-card${state.selectedId === station.id ? ' selected' : ''}" data-station-id="${esc(station.id)}" data-tone="${summary.tone}"><span class="station-number" aria-hidden="true">${index + 1}</span><div class="station-main"><button type="button" class="station-name" data-action="select" data-id="${esc(station.id)}">${esc(station.name)}</button><p class="station-address">${esc(station.address || '주소 미확인')}</p><div class="card-status-row"><span class="availability ${summary.tone}">${availability}</span><span class="card-distance">${Number.isFinite(dist) ? `${dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`}` : '위치 미확인'}</span></div><div class="card-tags"><span>총 ${summary.total}기</span>${station.operatorName ? `<span>${esc(station.operatorName)}</span>` : ''}${isOpen24(station) ? '<span>24시간</span>' : ''}${summary.maxPower ? `<span class="power-tag">최대 ${esc(summary.maxPower)} kW</span>` : ''}<span>${esc(connectors || '커넥터 미확인')}</span>${station.restricted === true ? '<span class="warning-tag">이용 제한</span>' : ''}${station.parkingFree === true ? '<span>주차 무료 등록</span>' : ''}${bands.map(band => `<span class="power-band band-${band}">${esc(POWER_BANDS[band])}</span>`).join('')}${summary.hasBusOnly ? '<span class="warning-tag">버스 전용 포함</span>' : ''}</div><p class="card-update">${demo ? '가상 예시 · ' : ''}${relativeTime(mostRecent)}${summary.stale && confirmed.length ? ' · 일부 충전기 확인 지연' : ''}</p></div><button type="button" class="card-save" data-action="favorite" data-id="${esc(station.id)}" aria-label="${esc(station.name)} ${state.favorites.has(station.id) ? '저장 해제' : '저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button></article>`;
+  return `<article class="station-card${state.selectedId === station.id ? ' selected' : ''}" data-station-id="${esc(station.id)}" data-tone="${summary.tone}" aria-current="${state.selectedId === station.id}"><span class="station-number" aria-hidden="true">${index + 1}</span><div class="station-main"><button type="button" class="station-name" data-action="select" data-id="${esc(station.id)}">${esc(station.name)}</button><p class="station-address">${esc(station.address || '주소 미확인')}</p><div class="card-status-row"><span class="availability ${summary.tone}">${availability}</span><span class="card-distance">${Number.isFinite(dist) ? `${dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`}` : '위치 미확인'}</span></div><div class="card-tags"><span>총 ${summary.total}기</span>${station.operatorName ? `<span>${esc(station.operatorName)}</span>` : ''}${isOpen24(station) ? '<span>24시간</span>' : ''}${summary.maxPower ? `<span class="power-tag">최대 ${esc(summary.maxPower)} kW</span>` : ''}<span>${esc(connectors || '커넥터 미확인')}</span>${station.restricted === true ? '<span class="warning-tag">이용 제한</span>' : ''}${station.parkingFree === true ? '<span>주차 무료 등록</span>' : ''}${bands.map(band => `<span class="power-band band-${band}">${esc(POWER_BANDS[band])}</span>`).join('')}${summary.hasBusOnly ? '<span class="warning-tag">버스 전용 포함</span>' : ''}</div><p class="card-update">${demo ? '가상 예시 · ' : ''}${relativeTime(mostRecent)}${summary.stale && confirmed.length ? ' · 일부 충전기 확인 지연' : ''}</p></div><button type="button" class="card-save" data-action="favorite" data-id="${esc(station.id)}" aria-label="${esc(station.name)} ${state.favorites.has(station.id) ? '저장 해제' : '저장'}" aria-pressed="${state.favorites.has(station.id)}">${icon('bookmark')}</button></article>`;
 }
 
 function render() {
@@ -209,7 +235,11 @@ function render() {
   $('resultCount').textContent = state.manifest ? state.visible.length.toLocaleString('ko-KR') : '—';
   $('scopeLabel').textContent = scopeLabel();
   const shown = state.visible.slice(0, state.listLimit);
-  $('listContent').innerHTML = shown.length ? shown.map(stationCard).join('') + (state.visible.length > shown.length ? `<button type="button" class="button show-more" data-action="more">충전소 더 보기 (${shown.length.toLocaleString('ko-KR')} / ${state.visible.length.toLocaleString('ko-KR')})</button>` : '') : emptyHTML();
+  const list = $('listContent');
+  const previousListScroll = list.scrollTop;
+  list.innerHTML = shown.length ? shown.map(stationCard).join('') + (state.visible.length > shown.length ? `<button type="button" class="button show-more" data-action="more">충전소 더 보기 (${shown.length.toLocaleString('ko-KR')} / ${state.visible.length.toLocaleString('ko-KR')})</button>` : '') : emptyHTML();
+  list.scrollTop = previousListScroll;
+  if (state.selectedId && document.querySelector('.sidebar')?.classList.contains('station-selection-focused')) queueSelectedListReveal(state.selectedId);
   const warningCodes = new Set((state.manifest?.warnings || []).map(item => item.code));
   const knownWarnings = new Set(['NOT_CONFIGURED', 'UNCONFIGURED', 'INITIALIZING', 'INVALID_COORDINATES']);
   const collectionFailed = [...warningCodes].some(code => !knownWarnings.has(code));
@@ -384,20 +414,21 @@ function selectStation(id, { preserveView = false, origin = 'list' } = {}) {
   preserveSelectedView = preserveView;
   const index = state.visible.findIndex(item => String(item.id) === String(id));
   if (origin === 'map' && index >= state.listLimit) state.listLimit = Math.ceil((index + 1) / 60) * 60;
-  render();
-  if (origin === 'map') {
-    requestAnimationFrame(() => {
-      const card = [...$('listContent').querySelectorAll('.station-card')].find(node => node.dataset.stationId === String(id));
-      card?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-    });
+  const sidebar = document.querySelector('.sidebar');
+  const isDesktop = window.matchMedia?.('(min-width:761px)').matches ?? true;
+  if (isDesktop && (origin === 'map' || sidebar?.classList.contains('station-selection-focused'))) {
+    sidebarSelectionFocus(station);
   }
+  render();
   if (hasCoordinates(station) && !preserveView) map?.focus(station, { zoom: Math.max(16, map?.getZoom?.() || 16) });
   renderDetails(station);
   // Nonmodal panel preserves an interactive, unblurred map and list.
   if (!$('stationDialog').open) $('stationDialog').show();
+  if (origin === 'map' || sidebar?.classList.contains('station-selection-focused')) queueSelectedListReveal(id);
 }
 
 function closeDetails() {
+  clearSidebarSelectionFocus();
   $('stationDialog').close();
   document.body.append($('toast'));
   state.selectedId = null;
@@ -548,6 +579,10 @@ function bindEvents() {
   $('filtersToggle').addEventListener('click', () => { const open = $('extraFilters').hidden; $('extraFilters').hidden = !open; $('filtersToggle').setAttribute('aria-expanded', String(open)); requestAnimationFrame(() => map?.resize()); });
   $('resetFilters').addEventListener('click', resetFilters);
   $('refreshButton').addEventListener('click', refresh);
+  $('selectionShowSearch').addEventListener('click', () => {
+    clearSidebarSelectionFocus();
+    $('searchInput').focus({ preventScroll: true });
+  });
   $('searchThisArea').addEventListener('click', async () => {
     if (state.loading || !state.bounds) return;
     clearTimeout(boundsTimer);
@@ -650,5 +685,5 @@ function startPolling() {
   refreshTimer = setInterval(() => { if (document.hidden) return; if (!demo) refresh(); else { render(); const station = currentStation(); if (station && $('stationDialog').open) renderDetails(station); } }, 60000);
 }
 startPolling();
-window.addEventListener('pagehide', () => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); });
+window.addEventListener('pagehide', () => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); cancelAnimationFrame(selectedListFrame); });
 window.addEventListener('pageshow', event => { if (event.persisted) { startPolling(); if (!demo) refresh(); } });
