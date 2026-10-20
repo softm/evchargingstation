@@ -2,7 +2,7 @@
 
 [앱 열기](https://softm.github.io/evchargingstation/) · [화면 체험](https://softm.github.io/evchargingstation/?demo=1) · [소스](https://github.com/softm/evchargingstation)
 
-**2026-10-20 최신 검증:** 앱과 체험 화면은 GitHub Pages에 배포되어 있으며 자동 테스트 45개(JavaScript 19개 + Python 26개), 검사·빌드가 통과했습니다. 실제 API의 HTTP 403 응답에서 오류코드 `30`을 확인했고, 수동 `full` 수집 실패 시 신규 배포를 중단하도록 보완했습니다. 실제 충전소 수집은 인증 오류로 미완료이며 자동 갱신은 비활성입니다. [검증 결과와 남은 확인 사항](docs/VALIDATION.md)을 참고하세요.
+**2026-10-20 최신 검증:** 공식 공공데이터 API에서 전국 충전소 **100,497곳·충전기 522,849대**의 전체 목록을 **53페이지·53회 요청**으로 수집했습니다. [GitHub Pages 배포 실행](https://github.com/softm/evchargingstation/actions/runs/39363450494)에서 전국 스냅샷 게시가 성공했습니다. 지역별 대용량 파일은 돌봄한눈 방식으로 gzip 압축해 전송하고 브라우저에서 해제하도록 구성했습니다. API와 사용 가능한 충전 상태의 정확성은 수집 시점·상태 확인 시각에 좌우되며 예약 자동 갱신은 최초 검증 전까지 비활성입니다. [검증 기록](docs/VALIDATION.md)을 참고하세요.
 
 한국환경공단의 충전소·충전기 정보를 지도와 목록으로 확인하는 앱입니다. 사용자 소유 [돌봄한눈 소스](https://github.com/softm/homecare-nationwide-care-services-map)의 지도 동작과 작은 공통 모듈을 활용했습니다.
 
@@ -23,6 +23,15 @@
 
 기술은 Vanilla ES modules, HTML/CSS, Python 표준 라이브러리입니다. Node.js 22 이상은 빌드와 테스트에 사용합니다. npm·Python 추가 패키지 설치가 필요하지 않습니다.
 
+## 지역별 gzip 배포
+
+- 수집기 원본: `public/data/manifest.json` + `public/data/releases/.../regions/11.json` 등 JSON 형식. 비공개 상태 캐시는 별도 저장합니다.
+- GitHub Pages 빌드: 원본 JSON은 유지하고, `dist/`의 대용량 지역 데이터를 `.json.gz`로 압축합니다. 일반 JSON `manifest.json`에는 압축 파일 경로, 바이트 수, 절감량(`regionStorage`)을 기록합니다.
+- 브라우저: 현재 지도와 관계있는 최대 4개 지역만 읽고 gzip 헤더를 확인해 `DecompressionStream('gzip')`으로 압축을 해제합니다. 원본 JSON 또는 CDN이 압축을 해제한 경우에도 호환됩니다.
+- 전송 최적화: 압축 후 크기가 더 큰 작은 파일은 JSON으로 유지합니다. 지역별 릴리스 경로와 HTTP 캐시를 사용하고, 이동 중 오래된 지역 데이터는 메모리에서 해제합니다.
+- API Secret은 정적 사이트에 삽입되지 않으며, 로컬 Python API의 JSON 계약도 그대로 유지됩니다.
+
+실제 용량은 [운영 데이터 매니페스트](https://softm.github.io/evchargingstation/data/manifest.json)의 `regionStorage`에서 확인합니다.
 ## 로컬 실행
 
 ```bash
