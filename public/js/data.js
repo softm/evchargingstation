@@ -82,7 +82,7 @@ export class DataClient {
     if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
     try {
       const response = await fetch(url, {
-        cache: path === 'manifest.json' ? 'no-store' : 'default',
+        cache: path === 'manifest.json' || path === 'fees.json' ? 'no-store' : 'default',
         signal: controller.signal,
         headers: { Accept: 'application/json, application/gzip' },
       });
@@ -98,6 +98,13 @@ export class DataClient {
     const value = await this.request('manifest.json', signal);
     if (!Array.isArray(value.regions)) throw new Error('지역 정보가 올바르지 않습니다.');
     return { ...value, regions: value.regions.map(normalizeRegionSearchArea) };
+  }
+
+  async fees(signal) {
+    const value = await this.request('fees.json', signal);
+    if (!Array.isArray(value.operators) || value.currency !== 'KRW' || value.unit !== 'kWh')
+      throw new Error('충전요금 데이터 형식을 확인할 수 없습니다.');
+    return value;
   }
 
   async region(entry, { force = false, signal } = {}) {
