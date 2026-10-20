@@ -22,7 +22,7 @@ for(const file of await walk(root)) {
   }
   if(/\.json$/.test(file)) JSON.parse(await readFile(file,'utf8'));
 }
-for (const page of ['index.html', 'data-status.html']) {
+for (const page of ['index.html', 'data-status.html', 'privacy.html']) {
 const html=await readFile(path.join(root,'public',page),'utf8');
 for(const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
   const src=match[1];

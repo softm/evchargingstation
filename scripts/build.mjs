@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { compressRegionFiles } from './compress-data.mjs';
+import { validAdUnit } from '../public/js/ads.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, 'dist');
@@ -24,6 +25,12 @@ for (const key of ['apiBaseUrl', 'dataBaseUrl']) {
   if (/servicekey|apikey|token=/i.test(value)) throw new Error(`Secret-like parameter in public URL setting: ${key}`);
 }
 await writeFile(path.join(output, 'config.js'), `/* Public settings only. */\nwindow.EV_CONFIG = Object.freeze(${JSON.stringify(config, null, 2)});\n`);
+vm.runInNewContext(await readFile(path.join(root, 'public/ad-config.js'), 'utf8'), context);
+const adConfig = { ...context.window.EV_AD_CONFIG };
+if (process.env.PUBLIC_ADFIT_BANNER_UNIT) adConfig.unit = process.env.PUBLIC_ADFIT_BANNER_UNIT;
+if (adConfig.unit && !validAdUnit(adConfig.unit)) throw new Error('Invalid PUBLIC_ADFIT_BANNER_UNIT: use the issued 320 × 100 AdFit unit ID.');
+await writeFile(path.join(output, 'ad-config.js'), `/* Public AdFit configuration. */\nwindow.EV_AD_CONFIG = Object.freeze(${JSON.stringify(adConfig, null, 2)});\n`);
+console.log(`AdFit banner: ${adConfig.enabled && adConfig.unit ? 'configured (serving/approval must be checked separately)' : 'unconfigured; no ad requests'}.`);
 const manifest = JSON.parse(await readFile(path.join(output, 'data/manifest.json'), 'utf8'));
 if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Invalid data manifest');
 const compression = await compressRegionFiles(path.join(output, 'data'), manifest);

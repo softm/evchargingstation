@@ -12,6 +12,8 @@
 
 ## 구현 범위
 
+**AdFit 배너:** 목록 6개 뒤의 320 × 100 배너와 비동기 로딩을 구현했습니다. 실제 광고단위 ID는 미설정이며 현재 광고 요청은 발생하지 않습니다. [연결 방법과 검증 범위](docs/ADFIT.md)를 참고하세요.
+
 | 영역 | 동작 |
 | --- | --- |
 | 지도 | 네이버 Maps, 실패 시 Leaflet·OpenStreetMap 대체 지도 |
@@ -69,6 +71,7 @@ python3 -m server --host 127.0.0.1 --port 8000
 | `PUBLIC_NAVER_MAP_CLIENT_ID` | Variable | 기존 지도 공개 Application Key ID 사용. 다른 앱 ID로 교체 가능 |
 | `PUBLIC_EV_API_BASE_URL` | Variable | 비우면 정적 snapshot. 운영 API가 있으면 HTTPS 주소 |
 | `PUBLIC_EV_DATA_BASE_URL` | Variable | 기본 `./data` |
+| `PUBLIC_ADFIT_BANNER_UNIT` | Variable | 충전한눈 등록 매체의 320 × 100 AdFit 단위 ID. 미설정 시 광고 요청·빈 슬롯 없음 |
 | `PAUSE_EV_COLLECTION` | Variable | 기본 예약 수집 활성. `true`일 때 중지 |
 | `CHARGEINFO_REUSE_APPROVED` | Variable | 기본 요금표 외부 수집 비활성. 허가·계약 확보 후 `true`로 허용 |
 | `MAX_API_CALLS_PER_RUN` | Variable | 기본 100, 페이지·재시도 포함 |

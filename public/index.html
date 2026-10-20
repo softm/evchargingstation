@@ -10,7 +10,9 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./css/app.css">
   <link rel="stylesheet" href="./css/layout.css">
+  <link rel="stylesheet" href="./css/ads.css">
   <script src="./config.js"></script>
+  <script src="./ad-config.js"></script>
   <script type="module" src="./js/app.js"></script>
 </head>
 <body>
@@ -55,9 +57,9 @@
       <section id="results" class="results" aria-label="검색 결과" tabindex="-1">
         <div class="results-heading"><div class="results-title"><h2>충전소 <span id="resultCount">—</span></h2><p id="scopeLabel">지도 화면 안에서 검색합니다</p></div><div class="result-tools"><label class="sort-wrap"><span class="sr-only">정렬</span><select id="sortSelect"><option value="available">충전 대기순</option><option value="distance">지도 중심 가까운순</option><option value="name">이름순</option><option value="count">조건 일치 충전기 많은순</option><option value="power">최대 출력 높은순</option></select></label><button id="refreshButton" type="button" class="icon-button" aria-label="데이터 새로고침"><svg class="icon"><use href="#i-refresh"/></svg></button></div></div>
         <details id="resultNotice" class="result-notice" hidden><summary id="resultNoticeSummary" aria-live="polite">정보 확인이 필요합니다</summary><div id="resultNoticeDetail" class="notice-detail"></div></details>
-        <div id="listContent" class="list-content"><div class="loading-state"><span class="loader"></span><p>충전소 정보를 확인하고 있습니다</p></div></div>
+        <div id="listContent" class="list-content"><div id="listBeforeAd"><div class="loading-state"><span class="loader"></span><p>충전소 정보를 확인하고 있습니다</p></div></div><aside id="adfitBanner" class="adfit-banner" aria-label="광고" data-ad-state="unconfigured" hidden><span class="adfit-label">광고</span><div class="adfit-creative"></div></aside><div id="listAfterAd"></div></div>
       </section>
-      <footer class="sidebar-footer"><a href="./data-status.html">수집 현황</a><a href="https://www.data.go.kr/data/15076352/openapi.do" target="_blank" rel="noopener noreferrer">출처<svg class="icon"><use href="#i-external"/></svg></a><details><summary>데이터 안내</summary><div class="sidebar-info"><h2>데이터·조회 안내</h2><div id="freshnessLine" class="freshness-line"><svg class="icon"><use href="#i-clock"/></svg><span>충전 상태 확인 시각을 함께 표시합니다</span></div><p id="inventoryTime">시설 정보 갱신 시각: 확인 중</p><p>지도 주변 검색은 화면과 겹치는 최대 4개 지역의 데이터를 사용합니다. 지도를 확대하거나 지역을 직접 선택해 조회 범위를 조정할 수 있습니다.</p><p>충전소별 확인 시각과 운영 정보를 확인하세요. 충전 상태는 현장과 다를 수 있으며, 충전 대기 표시는 예약을 의미하지 않습니다. 요금과 이용 조건은 운영사에서 확인하세요.</p><p>한국환경공단 공공데이터를 활용하는 민간 서비스이며 정부기관과 무관합니다.</p></div></details><span>민간 서비스</span></footer>
+      <footer class="sidebar-footer"><a href="./data-status.html">수집 현황</a><a href="https://www.data.go.kr/data/15076352/openapi.do" target="_blank" rel="noopener noreferrer">출처<svg class="icon"><use href="#i-external"/></svg></a><details><summary>데이터 안내</summary><div class="sidebar-info"><h2>데이터·조회 안내</h2><div id="freshnessLine" class="freshness-line"><svg class="icon"><use href="#i-clock"/></svg><span>충전 상태 확인 시각을 함께 표시합니다</span></div><p id="inventoryTime">시설 정보 갱신 시각: 확인 중</p><p>지도 주변 검색은 화면과 겹치는 최대 4개 지역의 데이터를 사용합니다. 지도를 확대하거나 지역을 직접 선택해 조회 범위를 조정할 수 있습니다.</p><p>충전소별 확인 시각과 운영 정보를 확인하세요. 충전 상태는 현장과 다를 수 있으며, 충전 대기 표시는 예약을 의미하지 않습니다. 요금과 이용 조건은 운영사에서 확인하세요.</p><p>한국환경공단 공공데이터를 활용하는 민간 서비스이며 정부기관과 무관합니다.</p><p><a href="./privacy.html">개인정보 처리 안내</a></p></div></details><span>민간 서비스</span></footer>
     </aside>
 
     <section class="map-section" aria-label="충전소 지도">

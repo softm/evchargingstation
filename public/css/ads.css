@@ -1,0 +1,8 @@
+/* In the list's normal scroll flow; no fixed banner consumes result height. */
+.list-content{container-type:inline-size}
+.adfit-banner{margin:20px 0;padding:16px 0 20px;border-block:1px solid var(--line);text-align:center;overflow:visible;min-width:0}
+.adfit-label{display:block;margin-bottom:12px;color:#718079;font-size:10px;line-height:16px;letter-spacing:.06em}
+.adfit-creative{width:320px;height:100px;margin-inline:auto;overflow:visible}
+.adfit-preview .adfit-creative{display:flex;align-items:center;justify-content:center;background:#f3f6f4;border:1px dashed #adbbb2;font-size:11px;color:#5b6f63}
+@container(max-width:319px){.adfit-banner{display:none}}
+@media(max-width:335px){.adfit-banner{display:none}}

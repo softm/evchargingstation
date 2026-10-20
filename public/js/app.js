@@ -1,5 +1,6 @@
 import { createMap, parseSharedView } from './map.js';
 import { revealSelectedCard } from './selection.js';
+import { BANNER_AFTER, mountAdBanner } from './ads.js';
 import { DataClient, selectViewportRegions } from './data.js';
 import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpen24, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl } from './domain.js';
 import { compareStations, nearbyAlternatives, estimateChargingCost } from './discovery.js';
@@ -13,6 +14,8 @@ const sharedView = parseSharedView(params);
 const config = window.EV_CONFIG || {};
 const client = new DataClient(config);
 const demo = params.get('demo') === '1';
+const banner = mountAdBanner({ host: $('adfitBanner'), root: $('listContent'), config: window.EV_AD_CONFIG,
+  preview: params.get('ad-preview') === '1', demo, win: window, doc: document, location });
 const favoriteKey = demo ? 'evchargingstation:demo-favorites:v1' : 'evchargingstation:favorites:v1';
 const sharedFilters = { query: (params.get('q') || '').slice(0, 200), connector: ['combo', 'ac', 'nacs', 'chademo', 'ac3', 'combo2'].includes(params.get('connector')) ? params.get('connector') : '', minPower: [50, 100, 200, 300].includes(Number(params.get('kw'))) ? Number(params.get('kw')) : 0, available: params.get('available') === '1', unrestricted: params.get('public') === '1', freeParking: params.get('parking') === '1', speed: Object.hasOwn(SPEEDS,params.get('speed')) ? params.get('speed') : '', operator: (params.get('operator') || '').slice(0,160), open24: params.get('open24') === '1', sort: ['available', 'distance', 'name', 'count', 'power'].includes(params.get('sort')) ? params.get('sort') : 'available' };
 const state = { manifest: null, fees: null, regions: new Map(), activeCodes: [], filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || 'auto', bounds: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: sharedView?.center || { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
@@ -292,7 +295,11 @@ function render() {
   const shown = state.visible.slice(0, state.listLimit);
   const list = $('listContent');
   const previousListScroll = list.scrollTop;
-  list.innerHTML = shown.length ? shown.map(stationCard).join('') + (state.visible.length > shown.length ? `<button type="button" class="button show-more" data-action="more">충전소 더 보기 (${shown.length.toLocaleString('ko-KR')} / ${state.visible.length.toLocaleString('ko-KR')})</button>` : '') : emptyHTML();
+  // Keep the ad node and its iframe connected while result cards change.
+  $('listBeforeAd').innerHTML = shown.length ? shown.slice(0, BANNER_AFTER).map(stationCard).join('') : emptyHTML();
+  $('listAfterAd').innerHTML = shown.slice(BANNER_AFTER).map(stationCard).join('')
+    + (state.visible.length > shown.length ? `<button type="button" class="button show-more" data-action="more">충전소 더 보기 (${shown.length.toLocaleString('ko-KR')} / ${state.visible.length.toLocaleString('ko-KR')})</button>` : '');
+  banner.update(shown.length);
   list.scrollTop = previousListScroll;
   if (state.selectedId) queueSelectedListReveal(state.selectedId);
   const warningCodes = new Set((state.manifest?.warnings || []).map(item => item.code));

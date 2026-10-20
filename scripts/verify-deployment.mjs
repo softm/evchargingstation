@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { gunzipSync } from 'node:zlib';
 import { summarizeCollection } from '../public/js/data-status-model.js';
+import { validAdUnit } from '../public/js/ads.js';
 
 const rawUrl = process.env.DEPLOYMENT_URL || process.argv[2];
 if (!rawUrl) throw new Error('Set DEPLOYMENT_URL or provide the published app URL.');
@@ -22,9 +23,10 @@ async function get(resource, json = false) {
 }
 
 async function verify() {
-  const [html, build, manifest, fees, app, css, statusPage, statusScript, statusCss, layoutCss] = await Promise.all([
+  const [html, build, manifest, fees, app, css, statusPage, statusScript, statusCss, layoutCss, ads, adCss, adConfig, privacy] = await Promise.all([
     get('./'), get('build-info.json', true), get('data/manifest.json', true), get('data/fees.json', true), get('js/app.js'), get('css/app.css'),
-    get('data-status.html'), get('js/data-status.js'), get('css/data-status.css'), get('css/layout.css')
+    get('data-status.html'), get('js/data-status.js'), get('css/data-status.css'), get('css/layout.css'),
+    get('js/ads.js'), get('css/ads.css'), get('ad-config.js'), get('privacy.html')
   ]);
   if (!html.includes('id="appLayout"') || !html.includes('./js/app.js')) throw new Error('Published root is not the charging app.');
   if (!build.sourceRevision) throw new Error('Published build has no source revision.');
@@ -33,6 +35,11 @@ async function verify() {
   if (!html.includes('./css/layout.css') || !html.includes('id="filterDialog"') || !layoutCss.includes('.filter-dialog')) {
     throw new Error('Published sidebar layout or filter panel assets are missing.');
   }
+  const adUnit = adConfig.match(/"unit"\s*:\s*"([^"]*)"/)?.[1];
+  if (!html.includes('id="adfitBanner"') || !html.includes('./ad-config.js') || !html.includes('./css/ads.css')
+      || !ads.includes('mountAdBanner') || !adCss.includes('.adfit-banner')
+      || !app.includes("$('listBeforeAd').innerHTML") || !privacy.includes('카카오 AdFit')
+      || typeof adUnit !== 'string' || (adUnit && !validAdUnit(adUnit))) throw new Error('Published AdFit integration assets/configuration are missing or invalid.');
   if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Published data manifest is invalid.');
   if (!html.includes('./data-status.html') || !statusPage.includes('id="dataSummary"')
       || !statusPage.includes('./js/data-status.js') || !statusScript.includes('summarizeCollection')
@@ -76,7 +83,7 @@ async function verify() {
     stations: manifest.totalStations, chargers: manifest.totalChargers,
     tariffs: fees.operators.length, feeMode: fees.mode,
     completeness: manifest.dataCompleteness || null,
-    regionStorage: manifest.regionStorage || null, verifiedAt: new Date().toISOString() }));
+    regionStorage: manifest.regionStorage || null, adFitConfigured: Boolean(adUnit), verifiedAt: new Date().toISOString() }));
 }
 
 for (let attempt = 1; attempt <= attempts; attempt++) {
