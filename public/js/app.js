@@ -198,6 +198,8 @@ async function loadRegions(force = false) {
   if (epoch !== state.loadEpoch) return;
   let failed = 0;
   results.forEach((result, index) => { if (result.status === 'fulfilled') state.regions.set(codes[index], result.value); else { failed++; console.warn('Region data unavailable:', codes[index], result.reason.message); } });
+  // Only active viewport provinces should retain decompressed station arrays in memory.
+  for (const code of state.regions.keys()) if (!codes.includes(code)) state.regions.delete(code);
   state.loading = false;
   if (failed) state.partialError = `${failed}개 지역을 갱신하지 못했습니다. 새로고침으로 다시 확인해 주세요.`;
   const incomplete = codes.some(code => state.regions.get(code)?.complete === false);
