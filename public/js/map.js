@@ -218,7 +218,8 @@ function installStyles() {
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected){width:15px;min-width:15px;height:15px;min-height:15px;padding:0;gap:0;border-width:2px;border-radius:50%}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected)::after{display:none}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-number,.ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){min-width:42px;padding-right:5px;gap:0}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){width:24px;min-width:24px;height:24px;min-height:24px;padding:0;gap:0;border-radius:50%}
+    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected){width:28px;min-width:28px;height:28px;min-height:28px;padding:0;gap:0;border-radius:50%}
     .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}\n    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
     .ev-map-pin.is-selected .ev-map-pin-label{max-width:240px;font-size:14px;font-weight:800;border:2px solid #087f64;background:#effcf6;color:#075842;padding:8px 11px}
     .ev-map-pin-label[hidden]{display:none}.ev-map-current{width:18px;height:18px;border:3px solid white;border-radius:50%;background:#287de0;box-shadow:0 0 0 7px #287de025,0 2px 5px #14366244}
@@ -396,7 +397,8 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
   function draw() {
     if (!engine || destroyed) return;
     host.dataset.markerScale = markerScale(engine.getZoom());
-    const view = selectMarkerModels(rows, engine.getBounds(), { selectedId: selection, summaries, limit: engine.getZoom() >= 15 ? 800 : 600 });
+    const zoom = engine.getZoom();
+    const view = selectMarkerModels(rows, engine.getBounds(), { selectedId: selection, summaries, limit: zoom < 11 ? 160 : zoom < 14 ? 380 : 800 });
     const models = view.models;
     densityMessage = view.limited ? `지도 ${models.length.toLocaleString()}곳 표시 · 확대하면 더 자세히 볼 수 있습니다` : '';
     if (tileErrors < 3) note.textContent = providerNote();

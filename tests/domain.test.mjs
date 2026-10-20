@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chargerState, summarizeStation, chargerMatches, filterStations, confirmation, typeInfo, distanceKm, safePhone, csvCell } from '../public/js/domain.js';
+import { chargerState, summarizeStation, chargerMatches, filterStations, confirmation, typeInfo, distanceKm, insideMapBounds, powerBand, POWER_BANDS, safePhone, csvCell } from '../public/js/domain.js';
 import { selectViewportRegions } from '../public/js/data.js';
 
 const now = Date.parse('2026-10-19T15:00:00Z');
@@ -75,4 +75,29 @@ test('coordinates, phone links and CSV reject unsafe values', () => {
   assert.equal(safePhone('javascript:alert(1)'), '');
   assert.equal(csvCell('=HYPERLINK("evil")'), '"\'=HYPERLINK(""evil"")"');
   assert.equal(csvCell('정상,주소'), '"정상,주소"');
+});
+
+test('map viewport excludes outside stations before availability summaries', () => {
+  const box = { south: 37.4, north: 37.6, west: 126.8, east: 127.1 };
+  assert.equal(insideMapBounds({ lat: 37.5, lng: 127 }, box), true);
+  assert.equal(insideMapBounds({ lat: 35.5, lng: 127 }, box), false);
+  assert.equal(insideMapBounds({ lat: null, lng: 127 }, box), false);
+  assert.equal(insideMapBounds({ lat: 37.4, lng: 126.8 }, box), true);
+});
+
+test('power bands follow the five supplied kW intervals', () => {
+  for (const [kw, band] of [[7,'slow'],[29.99,'slow'],[30,'medium'],[49.9,'medium'],[50,'fast'],[99.9,'fast'],[100,'fastPlus'],[199.99,'fastPlus'],[200,'ultra'],[350,'ultra']]) {
+    assert.equal(powerBand(kw), band, String(kw));
+    assert.ok(POWER_BANDS[band]);
+  }
+  assert.equal(powerBand(null), null);
+});
+
+test('map status color categories honor verified time and restricted use', () => {
+  const station = overrides => ({ chargers: [charger(overrides)], restricted: false });
+  assert.equal(summarizeStation(station({status:'2'}), {}, {}, now).tone, 'available');
+  assert.equal(summarizeStation(station({status:'3'}), {}, {}, now).tone, 'charging');
+  assert.equal(summarizeStation(station({status:'4'}), {}, {}, now).tone, 'unavailable');
+  assert.equal(summarizeStation(station({status:'2',observedAt:'2026-10-19T13:00:00Z'}), {}, {}, now).tone, 'unknown');
+  assert.equal(summarizeStation({ ...station({status:'2'}), restricted: true }, {}, {}, now).tone, 'restricted');
 });

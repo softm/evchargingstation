@@ -1,7 +1,7 @@
 import { createMap, parseSharedView } from './map.js';
 import { DataClient, selectViewportRegions } from './data.js';
 import { chargerFee, summarizeFees, feeLabel, facilityName } from './fees.js';
-import { DEFAULT_FILTERS, chargerState, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, safePhone, sourceUrl, powerBand, POWER_BANDS } from './domain.js';
+import { DEFAULT_FILTERS, chargerState, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl, powerBand, POWER_BANDS } from './domain.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -183,10 +183,14 @@ function stationCard(station, index) {
 
 function render() {
   const stations = allStations();
+  // Screen-wide province snapshots can contain tens of thousands of records.
+  // Narrow to the applied viewport before per-charger summarization and sorting.
+  const scopedStations = state.region === 'auto' && appliedBounds
+    ? stations.filter(station => insideMapBounds(station, appliedBounds))
+    : stations;
   const now = Date.now();
-  state.summaries = new Map(stations.map(station => [station.id, summarizeStation(station, stationRegion(station), state.filters, now, threshold())]));
-  state.visible = filterStations(stations, state.regions, state.filters, state.favorites, now, threshold());
-  if (state.region === 'auto' && appliedBounds) state.visible = state.visible.filter(station => hasCoordinates(station) && station.lat >= appliedBounds.south && station.lat <= appliedBounds.north && station.lng >= appliedBounds.west && station.lng <= appliedBounds.east);
+  state.summaries = new Map(scopedStations.map(station => [station.id, summarizeStation(station, stationRegion(station), state.filters, now, threshold())]));
+  state.visible = filterStations(scopedStations, state.regions, state.filters, state.favorites, now, threshold());
   state.visible.sort((a, b) => {
     if (state.filters.sort === 'name') return a.name.localeCompare(b.name, 'ko');
     if (state.filters.sort === 'available') {

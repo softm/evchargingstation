@@ -95,6 +95,14 @@ export function filterStations(stations, regions, filters, favorites = new Set()
   });
 }
 
+export function insideMapBounds(station, bounds) {
+  return hasCoordinates(station) && !!bounds &&
+    Number.isFinite(bounds.south) && Number.isFinite(bounds.north) &&
+    Number.isFinite(bounds.west) && Number.isFinite(bounds.east) &&
+    station.lat >= bounds.south && station.lat <= bounds.north &&
+    station.lng >= bounds.west && station.lng <= bounds.east;
+}
+
 export function hasCoordinates(station) {
   return typeof station.lat === 'number' && typeof station.lng === 'number' && Number.isFinite(station.lat) && Number.isFinite(station.lng) && station.lat >= -90 && station.lat <= 90 && station.lng >= -180 && station.lng <= 180 && !(station.lat === 0 && station.lng === 0);
 }
