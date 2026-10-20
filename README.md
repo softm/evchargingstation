@@ -1,5 +1,7 @@
 # 충전한눈 전기차 충전소 앱
 
+**2026-10-20 데이터 보강:** 환경공단 누락 시설·층수·제조사·연도 필드를 공개 데이터에 추가하고 24시간마다 전국 기반 목록을 재수집하며, GitHub Actions에서 5분 간격 상태 갱신을 수행하도록 작업했습니다. 공식 공공충전 요금표의 안내가는 별도 `fees.json`에 보관하고 회원·로밍·현장 금액과 구분합니다. 한국스마트그리드협회 요금표는 권리자에게 데이터 재이용 승인을 받은 뒤에만 자동 수집하도록 안전장치를 마련했습니다. [데이터 수집·스케줄 운영 기준](docs/DATA_COLLECTION.md)을 참고하세요.
+
 [앱 열기](https://softm.github.io/evchargingstation/) · [화면 체험](https://softm.github.io/evchargingstation/?demo=1) · [소스](https://github.com/softm/evchargingstation)
 
 **2026-10-20 최신 검증:** 공식 공공데이터 API에서 전국 충전소 **100,497곳·충전기 522,849대**의 전체 목록을 **53페이지·53회 요청**으로 수집했습니다. [GitHub Pages 배포 실행](https://github.com/softm/evchargingstation/actions/runs/39363450494)에서 전국 스냅샷 게시가 성공했습니다. 지역별 대용량 파일은 돌봄한눈 방식으로 gzip 압축해 전송합니다. **실배포 지역 데이터 16개 모두 gzip이며 177.7 MB에서 18.5 MB로 약 89.6% 줄었습니다.** API와 사용 가능한 충전 상태의 정확성은 수집 시점·상태 확인 시각에 좌우되며 예약 자동 갱신은 최초 검증 전까지 비활성입니다. [검증 기록](docs/VALIDATION.md)을 참고하세요.
@@ -24,6 +26,8 @@
 기술은 Vanilla ES modules, HTML/CSS, Python 표준 라이브러리입니다. Node.js 22 이상은 빌드와 테스트에 사용합니다. npm·Python 추가 패키지 설치가 필요하지 않습니다.
 
 ## 지역별 gzip 배포
+
+경쟁 서비스 분석에 따라 운영사·충전속도·24시간 필터, 조건 일치 충전기 수·출력 정렬, 상세의 인근 대안과 직접 입력 비용 계산을 추가했습니다. [관찰 근거와 구현 범위](docs/COMPETITOR_INSIGHTS.md)를 참고하세요.
 
 [데이터 수집 현황](https://softm.github.io/evchargingstation/data-status.html)에서 실제 게시된 전체·지역별 건수, 수집 확인 시각, JSON/gzip 용량과 절감률, 예약 수집 활성 여부를 확인합니다. ‘파일 검사’는 해당 지역의 실제 파일을 받아 해제하고 건수를 대조합니다. 현황 새로고침은 공공 API를 재수집하지 않습니다. 이 페이지는 [공통 개발 기준](https://github.com/softm/softm.github.io/blob/main/projects/development/DATA-STATUS-STANDARD.md)에 따라 모든 수집형 프로젝트의 필수 항목으로 관리합니다.
 

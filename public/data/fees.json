@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "mode": "public_reference",
+  "currency": "KRW",
+  "unit": "kWh",
+  "collectedAt": null,
+  "source": {
+    "name": "기후에너지환경부 공공충전요금 공표자료",
+    "url": "https://ev.or.kr/nportal/evcarInfo/initEvcarChargePriceV2.do",
+    "notice": "공공충전기 기준 공표 단가이며 현장·로밍·카드·할인에 따라 달라질 수 있습니다."
+  },
+  "operators": [
+    {
+      "operatorId": "ME",
+      "name": "기후에너지환경부",
+      "updatedAt": "2026-07-31",
+      "rates": [
+        {
+          "kind": "slow",
+          "membership": "member",
+          "minKw": 0,
+          "maxKwExclusive": 30,
+          "minPrice": 295,
+          "maxPrice": 295,
+          "basis": "official_output_tier",
+          "effectiveFrom": "2026-08-01"
+        },
+        {
+          "kind": "medium",
+          "membership": "member",
+          "minKw": 30,
+          "maxKwExclusive": 50,
+          "minPrice": 307.2,
+          "maxPrice": 307.2,
+          "basis": "official_output_tier",
+          "effectiveFrom": "2026-08-01"
+        },
+        {
+          "kind": "fast",
+          "membership": "member",
+          "minKw": 50,
+          "maxKwExclusive": 100,
+          "minPrice": 325.6,
+          "maxPrice": 325.6,
+          "basis": "official_output_tier",
+          "effectiveFrom": "2026-08-01"
+        },
+        {
+          "kind": "fast",
+          "membership": "member",
+          "minKw": 100,
+          "maxKwExclusive": 200,
+          "minPrice": 348.4,
+          "maxPrice": 348.4,
+          "basis": "official_output_tier",
+          "effectiveFrom": "2026-08-01"
+        },
+        {
+          "kind": "fast",
+          "membership": "member",
+          "minKw": 200,
+          "maxKwExclusive": null,
+          "minPrice": 393.1,
+          "maxPrice": 393.1,
+          "basis": "official_output_tier",
+          "effectiveFrom": "2026-08-01"
+        }
+      ]
+    }
+  ]
+}

@@ -4,3 +4,27 @@
 #map.map-canvas{position:absolute;inset:0}
 .refreshing .icon{animation:spin 1.2s linear infinite}
 .detail-actions [aria-pressed=true]{background:var(--green-light);color:var(--green);border-color:#b6dacc}
+
+/* Explicit viewport search stays above map tiles and below the detail panel. */
+.map-search-area{position:absolute;z-index:460;top:78px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:9px 17px;border:1px solid #087f64;border-radius:999px;background:#fff;color:#087f64;box-shadow:0 5px 24px #17362b30;font-size:13px;font-weight:750;white-space:nowrap;cursor:pointer}
+.map-search-area[hidden]{display:none!important}
+.map-search-area:hover{background:#e8f5ee}
+.map-search-area .icon{width:16px;height:16px}
+.station-dialog::backdrop{background:transparent;backdrop-filter:none}
+@media(max-width:760px){.map-search-area{top:62px;min-height:39px;padding:8px 14px;font-size:12px}}
+
+/* Nonmodal dialog is not placed in the browser top layer. Keep it above map tools. */
+.station-dialog:open{z-index:1200}
+
+/* Discovery controls remain within the sidebar on small screens. */
+.extra-filters{max-height:min(36dvh,320px);overflow:auto;overscroll-behavior:contain}
+.sort-wrap{max-width:160px}
+.nearby-station{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border:1px solid var(--line);border-radius:9px;padding:12px;margin-top:9px;background:#f8fbf9;color:#294c3a;cursor:pointer}
+.nearby-station strong{font-size:12px;overflow-wrap:anywhere}
+.nearby-station span,.nearby-station small{font-size:10px;line-height:1.6;color:#667d6c}
+.nearby-station:hover{border-color:#86b69b;background:#edf7f1}
+.official-fee{display:inline-block;font-size:12px;color:var(--green);margin:0 0 12px;text-decoration:underline;text-underline-offset:3px}
+.cost-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.cost-fields label{display:flex;flex-direction:column;gap:6px;font-size:11px;color:#60786a}
+.cost-fields input{width:100%;min-width:0;min-height:42px;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;color:#294c3a;background:#fff}
+.cost-result{display:block;margin-top:12px;border-radius:8px;background:#edf7f1;padding:12px;font-size:12px;color:var(--green);font-weight:650;overflow-wrap:anywhere}

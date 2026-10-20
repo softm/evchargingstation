@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildMarkerModels, containsCoordinate, createViewportGate, isCoordinate, markerHtml, normalizeBounds, parseSharedView, selectMarkerModels } from '../public/js/map.js';
+import { buildMarkerModels, containsCoordinate, createViewportGate, isCoordinate, labelBudget, markerHtml, markerScale, normalizeBounds, parseSharedView, selectMarkerModels } from '../public/js/map.js';
 
 test('좌표 미제공·빈 문자열·NaN을 실제 0도 위치로 바꾸지 않는다', () => {
   for (const point of [null, {}, { lat: null, lng: null }, { lat: '', lng: '' }, { lat: '37.5', lng: '127' }, { lat: NaN, lng: 127 }, { lat: 91, lng: 127 }, { lat: 0, lng: 0 }]) assert.equal(isCoordinate(point), false);
@@ -22,10 +22,10 @@ test('좌표가 없는 목록 항목을 지도에서 제외해도 마커 번호�
   const summaries = new Map([['B', { total: 4, available: 2, tone: 'available', label: '충전 대기 2 / 전체 4' }]]);
   const models = buildMarkerModels(stations, { selectedId: 'C', summaries });
   assert.deepEqual(models.map(model => [model.id, model.number, model.selected]), [['B', 2, false], ['C', 3, true]]);
-  assert.equal(models[0].count, '2/4');
+  assert.equal(models[0].count, '4기');
   assert.equal(models[0].tone, 'available');
   assert.equal(models[1].tone, 'unknown');
-  assert.equal(models[1].count, '?');
+  assert.equal(models[1].count, '—');
 });
 
 test('잘못된 상태 집계를 충전 가능 마커로 표시하지 않고 중복 ID를 한 번만 그린다', () => {
@@ -33,7 +33,7 @@ test('잘못된 상태 집계를 충전 가능 마커로 표시하지 않고 중
   const models = buildMarkerModels([station, { ...station }], { summaries: new Map([[station.id, { available: 3, total: 1, tone: 'available' }]]) });
   assert.equal(models.length, 1);
   assert.equal(models[0].tone, 'unknown');
-  assert.equal(models[0].count, '?');
+  assert.equal(models[0].count, '1기');
 });
 
 test('수집된 이름·ID·상태 문구는 HTML 속성과 본문으로 안전하게 표시한다', () => {
@@ -113,3 +113,9 @@ test('재사용한 두 파일이 원본 Git blob과 일치하여 출처 기록�
   }
 });
 /** SOFTM-EV-MAP-TEST END */
+
+test('돌봄한눈 배율 단계에 맞춰 점·핀·이름·상세 레벨을 나눈다', () => {
+  assert.deepEqual([10, 13, 14, 15, 16, 17, 18, 19].map(markerScale), ['dot','dot','pin','pin','name','name','detail','detail']);
+  assert.ok(labelBudget(12,800,600) <= labelBudget(16,800,600));
+  assert.ok(labelBudget(18,800,600) <= 40);
+});

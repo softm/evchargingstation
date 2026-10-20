@@ -8,11 +8,13 @@ on:
       collection_mode:
         description: 'Collection mode (auto, full, skip)'
         type: choice
-        options: [auto, full, skip]
+        options: [auto, full, status, skip]
         default: auto
   schedule:
-    # Best-effort snapshots, not a real-time SLA. Disabled until explicitly configured.
-    - cron: '2-59/5 * * * *'
+    # Best-effort 5-minute status updates. GitHub may delay or drop runs.
+    # ENABLE_SCHEDULED_COLLECTION no longer needs to be set. Emergency pause:
+    # set repository variable PAUSE_EV_COLLECTION=true.
+    - cron: '3-59/5 * * * *'
 
 permissions:
   contents: read
@@ -25,7 +27,9 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name != 'schedule' || vars.ENABLE_SCHEDULED_COLLECTION == 'true'
+    if: github.event_name != 'schedule' || vars.PAUSE_EV_COLLECTION != 'true'
+    outputs:
+      publish: ${{ steps.publish_decision.outputs.publish }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -49,10 +53,14 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_MODE: ${{ inputs.collection_mode || 'auto' }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           mode="$INPUT_MODE"
-          # A code-only push reuses complete cached data instead of rescanning the country.
-          if [ "$EVENT_NAME" = 'push' ] && python3 -c 'import json,pathlib,sys; p=pathlib.Path("public/data/manifest.json"); m=json.loads(p.read_text()); base=p.parent; sys.exit(0 if m.get("generatedAt") and m.get("totalStations",0)>0 and m.get("regions") and all((base/r["path"]).is_file() for r in m["regions"]) else 1)'; then
+          if [ "$EVENT_NAME" = 'push' ] && [[ "$COMMIT_MESSAGE" == *"[collect:full]"* ]]; then
+            # A single commit can deliberately force a full national rescan.
+            mode=full
+          # Code-only pushes normally reuse the last verified inventory.
+          elif [ "$EVENT_NAME" = 'push' ] && python3 -c 'import json,pathlib,sys; p=pathlib.Path("public/data/manifest.json"); m=json.loads(p.read_text()); base=p.parent; sys.exit(0 if m.get("generatedAt") and m.get("totalStations",0)>0 and m.get("regions") and all((base/r["path"]).is_file() for r in m["regions"]) else 1)'; then
             mode=skip
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
@@ -78,8 +86,18 @@ jobs:
           MAX_API_CALLS_PER_RUN: ${{ vars.MAX_API_CALLS_PER_RUN || '100' }}
           MAX_API_CALLS_PER_DAY: ${{ vars.MAX_API_CALLS_PER_DAY || '1000' }}
         run: python3 scripts/collect.py --mode "$REQUESTED_MODE" --output public/data --state-dir .cache/evchargingstation
+      - name: Collect permitted public tariff catalog
+        id: fees
+        continue-on-error: true
+        env:
+          CHARGEINFO_REUSE_APPROVED: ${{ vars.CHARGEINFO_REUSE_APPROVED || 'false' }}
+        run: |
+          python3 scripts/collect_fees.py | tee /tmp/ev-fees-result.json
+          if grep -q '"status": "updated"' /tmp/ev-fees-result.json; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
       - name: Preserve request budget and last complete dataset
-        if: always() && steps.configuration.outputs.enabled == 'true'
+        if: always()
         uses: actions/cache/save@v6.1.0
         with:
           path: |
@@ -93,7 +111,7 @@ jobs:
           echo '### Data collection needs attention' >> "$GITHUB_STEP_SUMMARY"
           echo 'The site will show the last complete snapshot and its original confirmation time. Check service authorization and quota.' >> "$GITHUB_STEP_SUMMARY"
       - name: Require successful requested full collection
-        if: github.event_name == 'workflow_dispatch' && inputs.collection_mode == 'full'
+        if: (github.event_name == 'workflow_dispatch' && inputs.collection_mode == 'full') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[collect:full]'))
         env:
           COLLECTION_ENABLED: ${{ steps.configuration.outputs.enabled }}
           COLLECTION_OUTCOME: ${{ steps.collect.outcome }}
@@ -104,20 +122,37 @@ jobs:
             echo 'Full collection requires configured credentials and a successful collection step. Review collection authorization and errors before retrying. No new deployment was published.' >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+      - name: Determine deployment necessity
+        id: publish_decision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COLLECTION_OUTCOME: ${{ steps.collect.outcome }}
+          FEE_UPDATED: ${{ steps.fees.outputs.changed }}
+        run: |
+          if [ "$EVENT_NAME" != 'schedule' ] || [ "$COLLECTION_OUTCOME" = 'success' ] || [ "$FEE_UPDATED" = 'true' ]; then
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            echo 'No new verified information; existing deployment preserved.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Check app contracts
+        if: steps.publish_decision.outputs.publish == 'true'
         run: npm run check
       - name: Test domain and collector
-        if: github.event_name != 'schedule'
+        if: github.event_name != 'schedule' && steps.publish_decision.outputs.publish == 'true'
         run: npm test
       - name: Build public application
+        if: steps.publish_decision.outputs.publish == 'true'
         env:
           PUBLIC_NAVER_MAP_CLIENT_ID: ${{ vars.PUBLIC_NAVER_MAP_CLIENT_ID }}
           PUBLIC_EV_API_BASE_URL: ${{ vars.PUBLIC_EV_API_BASE_URL }}
           PUBLIC_EV_DATA_BASE_URL: ${{ vars.PUBLIC_EV_DATA_BASE_URL }}
-          SCHEDULED_COLLECTION_ENABLED: ${{ vars.ENABLE_SCHEDULED_COLLECTION }}
+          SCHEDULED_COLLECTION_ENABLED: ${{ vars.PAUSE_EV_COLLECTION != 'true' }}
         run: npm run build
       - uses: actions/configure-pages@v6.0.0
+        if: steps.publish_decision.outputs.publish == 'true'
       - uses: actions/upload-pages-artifact@v5.0.0
+        if: steps.publish_decision.outputs.publish == 'true'
         with:
           path: dist
           name: evchargingstation-pages-${{ github.run_attempt }}
@@ -128,6 +163,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     needs: build
+    if: needs.build.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

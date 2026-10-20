@@ -59,6 +59,11 @@ export function createViewportGate() {
 }
 /** SOFTM-EV-VIEWPORT END */
 
+export const markerScale = zoom => zoom < 14 ? 'dot' : zoom < 16 ? 'pin' : zoom < 18 ? 'name' : 'detail';
+export const labelBudget = (zoom, width = 800, height = 600) => {
+  const cap = zoom < 12 ? 6 : zoom < 14 ? 12 : zoom < 16 ? 24 : 40;
+  return Math.max(1, Math.min(cap, Math.floor(Math.max(1, width) * Math.max(1, height) / (zoom < 14 ? 32000 : zoom < 16 ? 24000 : 16000))));
+};
 const nonNegativeCount = value => Number.isInteger(value) && value >= 0 ? value : null;
 
 export function buildMarkerModels(stations, { selectedId, summaries = new Map() } = {}) {
@@ -74,7 +79,7 @@ export function buildMarkerModels(stations, { selectedId, summaries = new Map() 
     const tone = confirmed && summary?.tone === 'available' && available > 0 ? 'available' : summary?.tone === 'busy' ? 'busy' : 'unknown';
     const label = String(summary?.label || '상태 미확인');
     return [{ id, station, number: index + 1, selected: String(selectedId ?? '') === id, tone,
-      count: confirmed && tone !== 'unknown' ? `${available}/${total}` : '?', label }];
+      count: total !== null ? `${total}기` : '—', label }];
   });
 }
 
@@ -210,6 +215,12 @@ function installStyles() {
     .ev-map-pin-number{display:grid;place-items:center;flex:none;min-width:25px;height:25px;border-radius:50%;background:white;color:#143e30;font-size:12px}
     .ev-map-pin-count{font-size:12px;letter-spacing:-.2px}.ev-map-pin.is-selected{outline:3px solid #164937;outline-offset:2px;box-shadow:0 0 0 7px #ffffffc9,0 5px 16px #163f3040}
     .ev-map-pin-label{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);max-width:220px;padding:6px 9px;overflow:hidden;text-overflow:ellipsis;border:1px solid #dce7e1;border-radius:8px;background:#fffffff5;color:#1b3b2c;font:600 12px/1.35 system-ui,sans-serif;box-shadow:0 2px 8px #153e2814;pointer-events:none}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected){width:15px;min-width:15px;height:15px;min-height:15px;padding:0;gap:0;border-width:2px;border-radius:50%}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected)::after{display:none}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-number,.ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){min-width:42px;padding-right:5px;gap:0}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
+    .ev-map-pin.is-selected .ev-map-pin-label{max-width:240px;font-size:14px;font-weight:800;border:2px solid #087f64;background:#effcf6;color:#075842;padding:8px 11px}
     .ev-map-pin-label[hidden]{display:none}.ev-map-current{width:18px;height:18px;border:3px solid white;border-radius:50%;background:#287de0;box-shadow:0 0 0 7px #287de025,0 2px 5px #14366244}
     .ev-map-failure{position:absolute;inset:0;display:grid;place-content:center;gap:10px;padding:24px;text-align:center;color:#324c40;font:500 14px/1.6 system-ui;background:#f2f6f3}
     .ev-map-host .leaflet-control-attribution{max-width:100%;font-size:10px}.ev-map-host .leaflet-control-scale-line{font-size:10px}
@@ -330,7 +341,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
     const occupied = obstacles();
     const pins = [...canvas.querySelectorAll('.ev-map-pin')].sort((a, b) => Number(b.classList.contains('is-selected')) - Number(a.classList.contains('is-selected')));
     let accepted = 0;
-    const limit = engine.getZoom() >= 16 ? 36 : engine.getZoom() >= 14 ? 16 : 0;
+    const limit = labelBudget(engine.getZoom(), bounds.width, bounds.height);
     for (const pin of pins) {
       const label = pin.querySelector('.ev-map-pin-label');
       if (!label) continue;
@@ -384,6 +395,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
 
   function draw() {
     if (!engine || destroyed) return;
+    host.dataset.markerScale = markerScale(engine.getZoom());
     const view = selectMarkerModels(rows, engine.getBounds(), { selectedId: selection, summaries });
     const models = view.models;
     densityMessage = view.limited ? `지도 ${models.length.toLocaleString()}곳 표시 · 확대하면 더 자세히 볼 수 있습니다` : '';
@@ -534,6 +546,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
       markers.clear();
       canvas.remove(); note.remove(); controls.remove();
       delete host.dataset.mapProvider;
+      delete host.dataset.markerScale;
       host.classList.remove('ev-map-host');
     }
   };

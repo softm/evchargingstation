@@ -22,8 +22,8 @@ async function get(resource, json = false) {
 }
 
 async function verify() {
-  const [html, build, manifest, app, css, statusPage, statusScript, statusCss] = await Promise.all([
-    get('./'), get('build-info.json', true), get('data/manifest.json', true), get('js/app.js'), get('css/app.css'),
+  const [html, build, manifest, fees, app, css, statusPage, statusScript, statusCss] = await Promise.all([
+    get('./'), get('build-info.json', true), get('data/manifest.json', true), get('data/fees.json', true), get('js/app.js'), get('css/app.css'),
     get('data-status.html'), get('js/data-status.js'), get('css/data-status.css')
   ]);
   if (!html.includes('id="appLayout"') || !html.includes('./js/app.js')) throw new Error('Published root is not the charging app.');
@@ -36,6 +36,18 @@ async function verify() {
       || !statusCss.includes('.metrics')) throw new Error('Mandatory data status page or its entry link/assets are missing.');
   if (summarizeCollection(manifest).problems.length) throw new Error('Published collection totals do not match regional results.');
   if (typeof build.scheduledCollectionEnabled !== 'boolean') throw new Error('Published collection schedule setting is missing.');
+  if (fees.schemaVersion !== 1 || fees.currency !== 'KRW' || fees.unit !== 'kWh' || !Array.isArray(fees.operators)
+      || fees.operators.some(operator => !operator.operatorId || !Array.isArray(operator.rates))) {
+    throw new Error('Published tariff guidance JSON is invalid.');
+  }
+  if (manifest.dataCompleteness) {
+    for (const [group, values] of Object.entries(manifest.dataCompleteness)) {
+      const total = group === 'charger' ? manifest.totalChargers : manifest.totalStations;
+      for (const count of Object.values(values)) {
+        if (!Number.isInteger(count) || count < 0 || count > total) throw new Error('Published completeness counts are invalid.');
+      }
+    }
+  }
   if (!['unconfigured', 'snapshot', 'live'].includes(manifest.mode) || build.dataMode !== manifest.mode) {
     throw new Error('Published build and production data modes disagree.');
   }
@@ -58,7 +70,10 @@ async function verify() {
   }
   if (manifest.mode === 'unconfigured') console.warn('Site is published; official data remains unconfigured.');
   console.log(JSON.stringify({ url: base.href, sourceRevision: build.sourceRevision, dataMode: manifest.mode,
-    stations: manifest.totalStations, chargers: manifest.totalChargers, regionStorage: manifest.regionStorage || null, verifiedAt: new Date().toISOString() }));
+    stations: manifest.totalStations, chargers: manifest.totalChargers,
+    tariffs: fees.operators.length, feeMode: fees.mode,
+    completeness: manifest.dataCompleteness || null,
+    regionStorage: manifest.regionStorage || null, verifiedAt: new Date().toISOString() }));
 }
 
 for (let attempt = 1; attempt <= attempts; attempt++) {

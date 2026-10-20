@@ -115,6 +115,12 @@ def normalize_station(station_id: str, rows: list[dict[str, Any]]) -> dict[str, 
             "type": text(row.get("chgerType")).zfill(2) if text(row.get("chgerType")) else "",
             "outputKw": output_kw(row.get("output")),
             "method": text(row.get("method")),
+            # Preserve charger-specific metadata without conflating stations.
+            "powerType": text(row.get("powerType")),
+            "manufacturer": text(row.get("maker")),
+            "installationYear": text(row.get("year")),
+            "floorNumber": text(row.get("floorNum")),
+            "floorType": text(row.get("floorType")),
             "status": text(row.get("stat")) or "0",
             "statusChangedAt": timestamp(row.get("statUpdDt")),
             "observedAt": iso(parse_iso(row.get("_observedAt"))) if parse_iso(row.get("_observedAt")) else None,
@@ -132,6 +138,13 @@ def normalize_station(station_id: str, rows: list[dict[str, Any]]) -> dict[str, 
         "regionCode": _first(rows, "zcode") or "00",
         "districtCode": _first(rows, "zscode"),
         "useTime": _combine(rows, "useTime"),
+        "facilityKind": _first(rows, "kind"),
+        "facilityDetailCode": _first(rows, "kindDetail"),
+        # trafficYn is the source's generic convenience-provision flag,
+        # not a certified wheelchair-accessibility indicator.
+        "convenienceProvided": flag(_first(rows, "trafficYn")),
+        "floorNumbers": _combine(rows, "floorNum"),
+        "floorTypes": _combine(rows, "floorType"),
         "parkingFree": parking_free,
         "restricted": restricted,
         "restrictionReason": _combine(rows, "limitDetail"),
@@ -294,6 +307,26 @@ class Collector:
         grouped: dict[str, list[dict[str, Any]]] = {}
         for station in stations:
             grouped.setdefault(station["regionCode"], []).append(station)
+        # Completeness is recorded so unavailable upstream attributes are not
+        # confused with a broken collector or fabricated default values.
+        chargers = [charger for station in stations for charger in station["chargers"]]
+        completeness = {
+            "station": {
+                "facilityKind": sum(bool(station["facilityKind"]) for station in stations),
+                "facilityDetailCode": sum(bool(station["facilityDetailCode"]) for station in stations),
+                "convenienceProvided": sum(station["convenienceProvided"] is not None for station in stations),
+                "floorInformation": sum(bool(station["floorNumbers"]) for station in stations),
+                "coordinates": sum(station["lat"] is not None and station["lng"] is not None for station in stations),
+                "restricted": sum(station["restricted"] is True for station in stations),
+            },
+            "charger": {
+                "manufacturer": sum(bool(charger["manufacturer"]) for charger in chargers),
+                "installationYear": sum(bool(charger["installationYear"]) for charger in chargers),
+                "floorNumber": sum(bool(charger["floorNumber"]) for charger in chargers),
+                "powerType": sum(bool(charger["powerType"]) for charger in chargers),
+                "stateObservedAt": sum(bool(charger["observedAt"]) for charger in chargers),
+            },
+        }
         generated_at = iso(self.clock())
         release_id = self.clock().strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:10]
         release_dir = self.output_dir / "releases" / release_id
@@ -304,6 +337,7 @@ class Collector:
             "statusCoverageAt": state["statusCoverageAt"], "source": SOURCE,
             "totalStations": len(stations), "totalChargers": sum(len(station["chargers"]) for station in stations),
             "freshnessThresholdSeconds": 600, "regions": [], "warnings": [],
+            "dataCompleteness": completeness,
         }
         invalid_locations = 0
         for code, items in sorted(grouped.items()):
