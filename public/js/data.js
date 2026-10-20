@@ -35,7 +35,7 @@ const REGION_SEARCH_AREAS = Object.freeze({
   '52': [35.8242, 127.1480, 1.10, 1.45], // 전북
 });
 
-function normalizeRegionSearchArea(region) {
+export function normalizeRegionSearchArea(region) {
   const area = REGION_SEARCH_AREAS[String(region.code)];
   if (!area) return region; // Future codes retain publisher-provided bounds.
   const [lat, lng, latRadius, lngRadius] = area;
