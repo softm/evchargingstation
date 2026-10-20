@@ -31,10 +31,10 @@ test('manual Busan selection uses a representative map center rather than a poll
   assert.equal(selectViewportRegions(entries, busanView, 4)[0].code, '26');
 });
 
-test('islands and unmapped future regions always have a nearby fallback instead of a blank list', () => {
+test('off-map bounds do not load unrelated provinces, and future region codes remain intact', () => {
   const entries = raw.map(normalizeRegionSearchArea);
   const farView = { south: 29.9, north: 30, west: 120, east: 120.1 };
-  assert.ok(selectViewportRegions(entries, farView, 4).length);
+  assert.deepEqual(selectViewportRegions(entries, farView, 4), []);
   const future = { code: '99', bounds: { south: 35, north: 36, west: 127, east: 128 } };
   assert.deepEqual(normalizeRegionSearchArea(future), future);
 });
