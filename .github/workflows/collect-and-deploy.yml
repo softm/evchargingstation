@@ -44,11 +44,23 @@ jobs:
             public/data
           key: evchargingstation-data-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: evchargingstation-data-v1-
+      - name: Select collection mode
+        id: selected_mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_MODE: ${{ inputs.collection_mode || 'auto' }}
+        run: |
+          mode="$INPUT_MODE"
+          # A code-only push reuses complete cached data instead of rescanning the country.
+          if [ "$EVENT_NAME" = 'push' ] && python3 -c 'import json,pathlib,sys; p=pathlib.Path("public/data/manifest.json"); m=json.loads(p.read_text()); base=p.parent; sys.exit(0 if m.get("generatedAt") and m.get("totalStations",0)>0 and m.get("regions") and all((base/r["path"]).is_file() for r in m["regions"]) else 1)'; then
+            mode=skip
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
       - name: Check collection configuration
         id: configuration
         env:
           DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
-          REQUESTED_MODE: ${{ inputs.collection_mode || 'auto' }}
+          REQUESTED_MODE: ${{ steps.selected_mode.outputs.mode }}
         run: |
           if [ -n "$DATA_GO_KR_SERVICE_KEY" ] && [ "$REQUESTED_MODE" != 'skip' ]; then
             echo 'enabled=true' >> "$GITHUB_OUTPUT"
@@ -62,7 +74,7 @@ jobs:
         continue-on-error: true
         env:
           DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
-          REQUESTED_MODE: ${{ inputs.collection_mode || 'auto' }}
+          REQUESTED_MODE: ${{ steps.selected_mode.outputs.mode }}
           MAX_API_CALLS_PER_RUN: ${{ vars.MAX_API_CALLS_PER_RUN || '100' }}
           MAX_API_CALLS_PER_DAY: ${{ vars.MAX_API_CALLS_PER_DAY || '1000' }}
         run: python3 scripts/collect.py --mode "$REQUESTED_MODE" --output public/data --state-dir .cache/evchargingstation
