@@ -24,6 +24,17 @@ let demoRegion;
 let initialRegionCentered = false;
 let mapSearchPending = false;
 
+function initialViewportBounds(center, zoom = 14) {
+  // A mobile-hidden map canvas may report zero-size bounds during setup.
+  const latitudeRadius = zoom >= 16 ? 0.024 : zoom >= 14 ? 0.065 : 0.18;
+  return {
+    south: center.lat - latitudeRadius,
+    north: center.lat + latitudeRadius,
+    west: center.lng - latitudeRadius * 1.45,
+    east: center.lng + latitudeRadius * 1.45
+  };
+}
+
 function updateMapSearchButton() {
   const button = $('searchThisArea');
   if (!button) return;
@@ -408,9 +419,14 @@ async function initializeMap() {
     else if (demo) map.setCenter({ lat: 37.5658, lng: 126.979 }, 14);
     else map.setCenter(state.center, 14);
     // Load only the provinces intersecting the actually centered map.
-    state.bounds = map.getBounds();
+    const requestedCenter = state.locationPoint || sharedView?.center || state.center;
+    const actualBounds = map.getBounds();
+    const includesCenter = actualBounds
+      && actualBounds.south < requestedCenter.lat && actualBounds.north > requestedCenter.lat
+      && actualBounds.west < requestedCenter.lng && actualBounds.east > requestedCenter.lng;
+    state.bounds = includesCenter ? actualBounds : initialViewportBounds(requestedCenter, map.getZoom());
     state.appliedBounds = state.bounds;
-    state.center = map.getCenter();
+    state.center = requestedCenter;
     mapSearchPending = false;
     updateMapSearchButton();
     render();
@@ -526,6 +542,9 @@ async function initializeUserLocation() {
 
 bindEvents();
 setMode();
+// The care-map mobile experience opens the map first, keeping its canvas
+// measurable when initial bounds are captured.
+if (window.matchMedia?.('(max-width:760px)').matches) setMobileView('map');
 // Resolve permission once; then center the map; then fetch the matching regions.
 await initializeUserLocation();
 await initializeMap();
