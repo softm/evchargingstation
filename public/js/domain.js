@@ -17,6 +17,15 @@ export const TYPES = Object.freeze({
   '11': { name: 'DC콤보2(버스 전용)', connectors: ['combo2'], busOnly: true },
 });
 
+export function powerBand(kw) {
+  const power = Number(kw);
+  if (!Number.isFinite(power) || power <= 0) return null;
+  return power < 30 ? 'slow' : power < 50 ? 'medium' : power < 100 ? 'fast' : power < 200 ? 'fastPlus' : 'ultra';
+}
+export const POWER_BANDS = Object.freeze({
+  slow: '완속(~30kW)', medium: '중속(30~50kW)', fast: '급속(50~100kW)',
+  fastPlus: '급속+(100~200kW)', ultra: '초급속(200kW~)'
+});
 export const DEFAULT_FILTERS = Object.freeze({ query: '', connector: '', minPower: 0, available: false, unrestricted: false, freeParking: false, favorites: false, sort: 'available' });
 
 export function typeInfo(type) {
@@ -63,7 +72,7 @@ export function summarizeStation(station, region, filters = DEFAULT_FILTERS, now
   const confirmed = states.filter(item => item.fresh).length;
   const unknown = states.filter(item => !item.fresh || !['2', '3', '4', '5', '6'].includes(item.code)).length;
   return { available, stale, unknown, busy, confirmed, matching: matches.length, total: chargers.length,
-    tone: available > 0 ? 'available' : confirmed && !unknown ? 'busy' : 'unknown',
+    tone: station.restricted === true ? 'restricted' : available > 0 ? 'available' : states.some(item => item.fresh && item.code === '3') ? 'charging' : confirmed && !unknown ? 'unavailable' : 'unknown',
     label: available > 0 ? `${available}기 충전 대기` : !matches.length ? '조건 일치 없음' : unknown ? '현재 상태 확인 필요' : '충전 대기 없음',
     hasBusOnly: chargers.some(charger => typeInfo(charger.type).busOnly),
     maxPower: matches.reduce((max, charger) => Number.isFinite(charger.outputKw) ? Math.max(max, charger.outputKw) : max, 0) || null,
@@ -84,6 +93,14 @@ export function filterStations(stations, regions, filters, favorites = new Set()
     const region = regions instanceof Map ? regions.get(String(station.regionCode)) : regions;
     return (station.chargers || []).some(charger => chargerMatches(charger, filters, region, now, threshold));
   });
+}
+
+export function insideMapBounds(station, bounds) {
+  return hasCoordinates(station) && !!bounds &&
+    Number.isFinite(bounds.south) && Number.isFinite(bounds.north) &&
+    Number.isFinite(bounds.west) && Number.isFinite(bounds.east) &&
+    station.lat >= bounds.south && station.lat <= bounds.north &&
+    station.lng >= bounds.west && station.lng <= bounds.east;
 }
 
 export function hasCoordinates(station) {

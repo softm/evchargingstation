@@ -136,23 +136,3 @@ export function selectViewportRegions(regions, bounds, limit = 4) {
     return score(a) - score(b);
   }).slice(0, limit);
 }
-/** SOFTM-EV-VIEWPORT: the visible list and map must share geographic bounds. */
-export function filterStationsToBounds(stations, bounds) {
-  if (!Array.isArray(stations)) return [];
-  if (!bounds) return stations;
-  if (!['south', 'north', 'west', 'east'].every(key => typeof bounds[key] === 'number' && Number.isFinite(bounds[key]))
-      || bounds.south > bounds.north || bounds.west > bounds.east) return [];
-  return stations.filter(station => {
-    const lat = station?.lat, lng = station?.lng;
-    return typeof lat === 'number' && Number.isFinite(lat)
-      && typeof lng === 'number' && Number.isFinite(lng)
-      && (lat !== 0 || lng !== 0)
-      && lat >= bounds.south && lat <= bounds.north
-      && lng >= bounds.west && lng <= bounds.east;
-  });
-}
-export function sameMapBounds(first, second, tolerance = 0.00005) {
-  return Boolean(first && second && ['south','north','west','east']
-    .every(key => Number.isFinite(first[key]) && Number.isFinite(second[key])
-      && Math.abs(first[key] - second[key]) <= tolerance));
-}

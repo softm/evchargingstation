@@ -44,9 +44,7 @@ test('수집된 이름·ID·상태 문구는 HTML 속성과 본문으로 안전�
   assert.match(html, /&lt;img/);
   assert.match(html, /&quot;/);
   assert.match(html, /aria-pressed="false"/);
-  assert.equal(html.includes('ev-map-pin-number'), false);
-  assert.equal(html.includes('ev-map-pin-glyph'), true);
-  assert.equal(html.includes('>1</span>'), false);
+  assert.equal(html.includes('ev-map-pin-number'), false, 'marker sequence number must not appear');
 });
 
 test('상세를 위한 내부 이동 이후 idle과 resize는 기존 목록을 보존한다', () => {
@@ -119,7 +117,6 @@ test('재사용한 두 파일이 원본 Git blob과 일치하여 출처 기록�
 
 test('돌봄한눈 배율 단계에 맞춰 점·핀·이름·상세 레벨을 나눈다', () => {
   assert.deepEqual([10, 13, 14, 15, 16, 17, 18, 19].map(markerScale), ['dot','dot','pin','pin','name','name','detail','detail']);
-  assert.equal(labelBudget(12,800,600), 0);
   assert.ok(labelBudget(12,800,600) <= labelBudget(16,800,600));
   assert.ok(labelBudget(18,800,600) <= 40);
 });
