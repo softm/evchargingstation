@@ -1,18 +1,27 @@
 # 구현과 배포 검증 기록
 
-## 2026-10-20 — 최초 전국 실데이터 수집 및 gzip 전송 구조
+## 2026-10-20 12:39 KST — 전국 충전소 gzip 운영 배포 완료
 
-- 공식 승인키 수정 후 전국 53페이지·API 53회로 충전소 **100,497곳**, 충전기 **522,849대**를 실제 수집했다.
-- [최초 수집 성공 로그](https://github.com/softm/evchargingstation/actions/runs/39348930525)는 수집과 빌드는 성공했으나, 같은 워크플로 재실행에 `github-pages` 아티팩트가 2개 생성되어 게시가 실패했다.
-- [고유 아티팩트명 수정본 배포](https://github.com/softm/evchargingstation/actions/runs/39363450494)는 수집·빌드·GitHub Pages 배포가 모두 성공했다. 빌드 기준 저장된 총계는 동일하다.
-- 새 정적 빌드에서는 지역별 원본 JSON의 전송용 파일을 `.json.gz`로 압축하도록 구현했다. `scripts/compress-data.mjs`, `public/js/data.js`, `scripts/verify-deployment.mjs`, `tests/compression.test.mjs`를 확인한다.
-- gzip 구조의 실제 운영 게시 여부와 압축률 수치는 별도 배포 실행 이후 검증 결과를 업데이트한다. 원본 데이터는 바꾸지 않으며, 자동 상태 갱신은 활성화하지 않았다.
+공식 API 승인키로 전국 충전소 **100,497곳·충전기 522,849대**를 **53페이지·API 53회** 수집했습니다. 출처의 수집 확인 시각과 충전기 상태값은 별도로 구분하며, 스냅샷 데이터는 실시간 충전 가능 여부를 보장하지 않습니다.
+
+| 검증 항목 | 실제 결과 | 근거 |
+| --- | --- | --- |
+| 전국 전체 수집 | 충전소 100,497곳, 충전기 522,849대, 53페이지 | [수집·배포 기록](https://github.com/softm/evchargingstation/actions/runs/39363450494) |
+| gzip 지역 데이터 | 전국 매니페스트의 16개 지역 모두 `.json.gz` | [gzip 배포 실행](https://github.com/softm/evchargingstation/actions/runs/39365406229) |
+| 전송 데이터 크기 | 원본 **177,730,962 B** → 압축 **18,506,671 B**, **159,224,291 B(약 89.6%) 절감** | 빌드 로그의 `Region bytes` |
+| 자동 테스트 | JavaScript 23개 + Python 26개, 총 49개 통과 | 같은 빌드 실행의 `npm test` |
+| 배포 및 검증 | `build` 및 `deploy` 성공, 운영 주소 200·빌드 커밋·매니페스트·실제 압축 지역 파일을 열어 스키마·지역코드·건수 검사 성공 | [배포 검증](https://github.com/softm/evchargingstation/actions/runs/39365406229) |
+| 반복 수집 방지 | 코드만 변경한 `push`는 유효한 스냅샷 캐시가 있으면 53페이지 전체 재수집을 생략 | CI `Select collection mode` 확인 |
+| 메모리·호환성 | 지도 화면 밖의 지역 객체 해제, 클라이언트 지역 캐시 최대 4개, 일반 JSON·gzip 자동 감지 | [공개 로딩 코드](https://github.com/softm/evchargingstation/blob/main/public/js/data.js) |
+| 자동 상태 갱신 | **활성화하지 않음**. 최초 스냅샷은 확인됐으나 API 호출량과 연속 상태 업데이트는 추가 운영 검증 필요 | [운영 설정](https://github.com/softm/evchargingstation/settings/variables/actions) |
+
+이전 수집 당시에는 Actions 재시도 과정에서 동일한 `github-pages` 아티팩트가 2개 생성되어 배포가 실패했습니다. 고유 아티팩트 이름으로 수정한 뒤 정상 배포했으며, 이번 gzip 배포도 동일한 배포 조건으로 성공했습니다. 실 브라우저 전환·모바일 메모리 사용량에 대한 장시간 수동 검사는 이번 실행의 자동 검증 범위에 포함되지 않았습니다.
 
 ---
 
 ## 2026-10-20 — 실제 API 인증 오류 진단과 배포 정책 보완
 
-검증 대상은 [`cf3f55e66612aae2613fcb54e9080bb94ddef980`](https://github.com/softm/evchargingstation/commit/cf3f55e66612aae2613fcb54e9080bb94ddef980)의 배포본입니다. 아래의 이전 시각별 기록은 당시 결과이며, 현재 상태는 이 절을 기준으로 확인합니다.
+검증 대상은 [`cf3f55e66612aae2613fcb54e9080bb94ddef980`](https://github.com/softm/evchargingstation/commit/cf3f55e66612aae2613fcb54e9080bb94ddef980)의 배포본입니다. 아래의 기록은 당시 진단 결과입니다. 현재 운영 상태는 상단의 최신 gzip 배포 검증을 기준으로 확인합니다.
 
 | 항목 | 확인 결과 | 근거 |
 | --- | --- | --- |

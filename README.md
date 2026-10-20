@@ -2,7 +2,7 @@
 
 [앱 열기](https://softm.github.io/evchargingstation/) · [화면 체험](https://softm.github.io/evchargingstation/?demo=1) · [소스](https://github.com/softm/evchargingstation)
 
-**2026-10-20 최신 검증:** 공식 공공데이터 API에서 전국 충전소 **100,497곳·충전기 522,849대**의 전체 목록을 **53페이지·53회 요청**으로 수집했습니다. [GitHub Pages 배포 실행](https://github.com/softm/evchargingstation/actions/runs/39363450494)에서 전국 스냅샷 게시가 성공했습니다. 지역별 대용량 파일은 돌봄한눈 방식으로 gzip 압축해 전송하고 브라우저에서 해제하도록 구성했습니다. API와 사용 가능한 충전 상태의 정확성은 수집 시점·상태 확인 시각에 좌우되며 예약 자동 갱신은 최초 검증 전까지 비활성입니다. [검증 기록](docs/VALIDATION.md)을 참고하세요.
+**2026-10-20 최신 검증:** 공식 공공데이터 API에서 전국 충전소 **100,497곳·충전기 522,849대**의 전체 목록을 **53페이지·53회 요청**으로 수집했습니다. [GitHub Pages 배포 실행](https://github.com/softm/evchargingstation/actions/runs/39363450494)에서 전국 스냅샷 게시가 성공했습니다. 지역별 대용량 파일은 돌봄한눈 방식으로 gzip 압축해 전송합니다. **실배포 지역 데이터 16개 모두 gzip이며 177.7 MB에서 18.5 MB로 약 89.6% 줄었습니다.** API와 사용 가능한 충전 상태의 정확성은 수집 시점·상태 확인 시각에 좌우되며 예약 자동 갱신은 최초 검증 전까지 비활성입니다. [검증 기록](docs/VALIDATION.md)을 참고하세요.
 
 한국환경공단의 충전소·충전기 정보를 지도와 목록으로 확인하는 앱입니다. 사용자 소유 [돌봄한눈 소스](https://github.com/softm/homecare-nationwide-care-services-map)의 지도 동작과 작은 공통 모듈을 활용했습니다.
 
