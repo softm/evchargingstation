@@ -1,6 +1,6 @@
 import { createMap, parseSharedView } from './map.js';
 import { DataClient, selectViewportRegions } from './data.js';
-import { chargerFee, summarizeFees, feeLabel, facilityName } from './fees.js';
+import { chargerFee, summarizeFees, feeLabel, facilityName, facilityDetailName } from './fees.js';
 import { DEFAULT_FILTERS, chargerState, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl, powerBand, POWER_BANDS } from './domain.js';
 
 const $ = id => document.getElementById(id);
@@ -379,7 +379,7 @@ function renderDetails(station) {
     ? `회원 참고요금 ${esc(feeLabel(memberFee))}${guestFee ? ` / 비회원 ${esc(feeLabel(guestFee))}` : ''} <small>(원/kWh, 출력·요금제에 따라 차이)</small><a href="${priceSource}" target="_blank" rel="noopener noreferrer">공식 요금 안내</a>`
     : `요금 미확인 · <a href="${priceSource}" target="_blank" rel="noopener noreferrer">공식 사업자 요금표 확인</a>`;
   const facilityText = station.facilityKind
-    ? `${esc(facilityName(station))}${station.facilityDetailCode ? ` · 상세코드 ${esc(station.facilityDetailCode)}` : ''}`
+    ? `${esc(facilityName(station))}${station.facilityDetailCode ? ` · ${esc(facilityDetailName(station))}` : ''}`
     : '시설 유형 미확인';
   const floors = [station.floorTypes, station.floorNumbers].filter(Boolean).map(esc).join(' · ') || '설치 층수 미등록';
   const convenience = station.convenienceProvided === true ? '편의제공 있음으로 등록 (종류 미확인)' : station.convenienceProvided === false ? '편의제공 없음으로 등록' : '편의제공 여부 미확인';
