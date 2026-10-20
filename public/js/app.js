@@ -20,6 +20,14 @@ let boundsTimer;
 let inputTimer;
 let refreshTimer;
 let demoRegion;
+let mapSearchPending = false;
+
+function updateMapSearchButton() {
+  const button = $('searchThisArea');
+  if (!button) return;
+  button.hidden = !mapSearchPending;
+  button.disabled = state.loading;
+}
 
 function readFavorites() {
   try { const value = JSON.parse(localStorage.getItem(favoriteKey) || '[]'); return new Set(Array.isArray(value) ? value.filter(item => typeof item === 'string').slice(0, 1000) : []); }
@@ -150,6 +158,7 @@ function render() {
   const freshest = [...state.regions.values()].filter(region => state.activeCodes.includes(String(region.regionCode))).map(region => region.statusCoverageAt || region.generatedAt).filter(Boolean).sort().at(-1);
   $('freshnessLine').querySelector('span').textContent = demo ? '가상 예시 · 실제 충전 상태가 아닙니다' : state.manifest?.mode === 'unconfigured' ? '연결 후 충전기별 확인 시각을 표시합니다' : freshest ? `지역 데이터 ${relativeTime(freshest)} · 상태는 충전기별 확인` : '충전 상태 확인 시각을 함께 표시합니다';
   updateControls();
+  updateMapSearchButton();
   setMode();
   map?.setStations(state.visible, { selectedId: state.selectedId, summaries: state.summaries });
 }
@@ -270,7 +279,8 @@ function selectStation(id, { preserveView = false, origin = 'list' } = {}) {
   }
   if (hasCoordinates(station) && !preserveView) map?.focus(station, { zoom: Math.max(16, map?.getZoom?.() || 16) });
   renderDetails(station);
-  if (!$('stationDialog').open) $('stationDialog').showModal();
+  // Nonmodal panel preserves an interactive, unblurred map and list.
+  if (!$('stationDialog').open) $('stationDialog').show();
 }
 
 function closeDetails() {
@@ -351,7 +361,11 @@ async function initializeMap() {
       state.navigationRevision++;
       state.bounds = bounds;
       state.center = map?.getCenter() || { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
-      clearTimeout(boundsTimer); boundsTimer = setTimeout(() => state.region === 'auto' ? loadRegions() : render(), 350);
+      // Do not change the loaded region/list while the user is panning.
+      // The explicit overlay button applies the new viewport on demand.
+      clearTimeout(boundsTimer);
+      mapSearchPending = true;
+      updateMapSearchButton();
     }, onBackgroundClick: () => { if ($('stationDialog').open) closeDetails(); }, onError: error => { if (error?.recoverable) return; $('mapMessage').textContent = error?.message || '지도를 불러오지 못했습니다. 충전소 목록을 이용해 주세요.'; $('mapMessage').hidden = false; } });
     const selected = currentStation();
     if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
@@ -375,9 +389,23 @@ function bindEvents() {
   $('filtersToggle').addEventListener('click', () => { const open = $('extraFilters').hidden; $('extraFilters').hidden = !open; $('filtersToggle').setAttribute('aria-expanded', String(open)); requestAnimationFrame(() => map?.resize()); });
   $('resetFilters').addEventListener('click', resetFilters);
   $('refreshButton').addEventListener('click', refresh);
+  $('searchThisArea').addEventListener('click', async () => {
+    if (state.loading || !state.bounds) return;
+    clearTimeout(boundsTimer);
+    mapSearchPending = false;
+    state.region = 'auto';
+    $('regionSelect').value = 'auto';
+    state.sharedId = null;
+    state.listLimit = 60;
+    updateMapSearchButton();
+    await loadRegions();
+    $('listContent').scrollTop = 0;
+  });
   $('regionSelect').addEventListener('change', async event => {
     state.navigationRevision++;
     state.region = event.target.value; state.sharedId = null; state.listLimit = 60;
+    mapSearchPending = false;
+    updateMapSearchButton();
     const entry = state.manifest?.regions.find(region => String(region.code) === state.region);
     if (entry?.bounds) { const bounds = entry.bounds; state.center = { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 }; map?.setCenter(state.center, 10); }
     await loadRegions();
@@ -414,6 +442,8 @@ function bindEvents() {
       if (requestedRevision !== state.navigationRevision) return;
       state.center = { lat: position.coords.latitude, lng: position.coords.longitude };
       state.region = 'auto'; $('regionSelect').value = 'auto'; map?.locate(state.center);
+      mapSearchPending = true;
+      updateMapSearchButton();
       if (!map) { state.bounds = null; loadRegions(); }
       toast('내 위치 주변의 충전소를 조회합니다.');
     }, error => { $('locateButton').disabled = false; if (requestedRevision !== state.navigationRevision) return; toast(error.code === 1 ? '위치 권한을 허용하거나 지역을 직접 선택해 주세요.' : '현재 위치를 확인하지 못했습니다. 지역을 직접 선택해 주세요.'); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
