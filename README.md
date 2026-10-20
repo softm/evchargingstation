@@ -25,6 +25,8 @@
 
 ## 지역별 gzip 배포
 
+[데이터 수집 현황](https://softm.github.io/evchargingstation/data-status.html)에서 실제 게시된 전체·지역별 건수, 수집 확인 시각, JSON/gzip 용량과 절감률, 예약 수집 활성 여부를 확인합니다. ‘파일 검사’는 해당 지역의 실제 파일을 받아 해제하고 건수를 대조합니다. 현황 새로고침은 공공 API를 재수집하지 않습니다. 이 페이지는 [공통 개발 기준](https://github.com/softm/softm.github.io/blob/main/projects/development/DATA-STATUS-STANDARD.md)에 따라 모든 수집형 프로젝트의 필수 항목으로 관리합니다.
+
 - 수집기 원본: `public/data/manifest.json` + `public/data/releases/.../regions/11.json` 등 JSON 형식. 비공개 상태 캐시는 별도 저장합니다.
 - GitHub Pages 빌드: 원본 JSON은 유지하고, `dist/`의 대용량 지역 데이터를 `.json.gz`로 압축합니다. 일반 JSON `manifest.json`에는 압축 파일 경로, 바이트 수, 절감량(`regionStorage`)을 기록합니다.
 - 브라우저: 현재 지도와 관계있는 최대 4개 지역만 읽고 gzip 헤더를 확인해 `DecompressionStream('gzip')`으로 압축을 해제합니다. 원본 JSON 또는 CDN이 압축을 해제한 경우에도 호환됩니다.
