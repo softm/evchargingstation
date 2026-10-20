@@ -71,6 +71,7 @@ export class DataClient {
   constructor(config = {}) {
     this.base = new URL(`${String(config.apiBaseUrl || config.dataBaseUrl || './data').replace(/\/$/, '')}/`, location.href);
     this.cache = new Map();
+    this.pendingRegions = new Map();
   }
 
   async request(path, signal) {
@@ -116,14 +117,23 @@ export class DataClient {
       this.cache.set(cacheKey, cached);
       return cached;
     }
-    const data = await this.request(entry.path, signal);
-    if (!Array.isArray(data.stations) || String(data.regionCode) !== code) throw new Error('지역 충전소 정보를 확인할 수 없습니다.');
-    const normalized = { ...data, regionCode: code, stations: data.stations.map(station => ({ ...station, id: String(station.id), regionCode: String(station.regionCode), chargers: (station.chargers || []).map(charger => ({ ...charger, id: String(charger.id), type: String(charger.type).padStart(2, '0'), status: String(charger.status ?? '0') })) })) };
-    for (const key of this.cache.keys()) if (key.startsWith(`${code}:`) && key !== cacheKey) this.cache.delete(key);
-    this.cache.set(cacheKey, normalized);
-    // Limit memory when users pan across many provinces. Fetches can reuse the HTTP cache.
-    while (this.cache.size > 4) this.cache.delete(this.cache.keys().next().value);
-    return normalized;
+    // Repeated pans can request the same immutable shard before it finishes.
+    // Share its download/decompression; independently abortable callers stay separate.
+    let task = !signal && this.pendingRegions.get(cacheKey);
+    if (!task) {
+      task = this.request(entry.path, signal).then(data => {
+        if (!Array.isArray(data.stations) || String(data.regionCode) !== code) throw new Error('지역 충전소 정보를 확인할 수 없습니다.');
+        const normalized = { ...data, regionCode: code, stations: data.stations.map(station => ({ ...station, id: String(station.id), regionCode: String(station.regionCode), chargers: (station.chargers || []).map(charger => ({ ...charger, id: String(charger.id), type: String(charger.type).padStart(2, '0'), status: String(charger.status ?? '0') })) })) };
+        for (const key of this.cache.keys()) if (key.startsWith(`${code}:`) && key !== cacheKey) this.cache.delete(key);
+        this.cache.set(cacheKey, normalized);
+        // Limit memory when users pan across many provinces. Fetches can reuse the HTTP cache.
+        while (this.cache.size > 4) this.cache.delete(this.cache.keys().next().value);
+        return normalized;
+      });
+      if (!signal) this.pendingRegions.set(cacheKey, task);
+    }
+    try { return await task; }
+    finally { if (this.pendingRegions.get(cacheKey) === task) this.pendingRegions.delete(cacheKey); }
   }
 }
 

@@ -62,7 +62,6 @@ let appliedBounds = null;
 let initialLocation = null;
 let locationFailure = '';
 let locationRequest = null;
-let initialBoundsConsumed = false;
 let initialRegionPending = !demo && state.region !== 'auto' && !sharedView && !state.sharedId;
 
 /** Handle hidden/zero-size maps and asynchronous SDK centering at startup. */
@@ -116,6 +115,59 @@ function updateMapSearchButton() {
   if (!button) return;
   button.hidden = !mapSearchPending;
   button.disabled = state.loading;
+}
+
+function cancelMapSearch() {
+  clearTimeout(boundsTimer);
+  mapSearchPending = false;
+  updateMapSearchButton();
+}
+
+async function searchCurrentMap() {
+  clearTimeout(boundsTimer);
+  mapSearchPending = false;
+  updateMapSearchButton();
+  if (!state.manifest || !state.bounds) return;
+  appliedBounds = state.bounds;
+  state.center = map?.getCenter() || state.center;
+  state.region = 'auto';
+  $('regionSelect').value = 'auto';
+  state.sharedId = null;
+  state.listLimit = 60;
+  updateMapSearchButton();
+  // A new viewport may arrive while a shard is loading. loadEpoch prevents an
+  // older response from replacing it; cached shards still need a fresh render.
+  await loadRegions();
+  $('listContent').scrollTop = 0;
+}
+
+function mapBoundsChanged(bounds, { source = 'user' } = {}) {
+  state.bounds = bounds;
+  // Region selections and station focus move the map internally. Retain their
+  // list until the user actually explores the map; resize follows auto mode.
+  if (source !== 'user' && (state.region !== 'auto' || state.selectedId || state.sharedId)) return;
+  if (source === 'user') {
+    state.navigationRevision++;
+    initialRegionPending = false;
+    clearSidebarSelectionFocus();
+  }
+  appliedBounds = bounds;
+  state.center = map?.getCenter() || { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
+  state.region = 'auto';
+  $('regionSelect').value = 'auto';
+  state.sharedId = null;
+  mapSearchPending = true;
+  updateMapSearchButton();
+  clearTimeout(boundsTimer);
+  // The adapter waits 350 ms after the final pan/zoom event. Coalesce any
+  // remaining layout events before applying the latest viewport automatically.
+  boundsTimer = setTimeout(() => {
+    void searchCurrentMap().catch(error => {
+      state.partialError = error.message || '지도 주변 정보를 불러오지 못했습니다.';
+      state.loading = false;
+      render();
+    });
+  }, 100);
 }
 
 function readFavorites() {
@@ -300,8 +352,8 @@ async function loadRegions(force = false) {
   if (!state.manifest) return;
   const entries = regionEntries();
   const codes = entries.map(region => String(region.code));
-  if (!force && codes.join(',') === state.activeCodes.join(',') && codes.every(code => state.regions.has(code))) { render(); return; }
   const epoch = ++state.loadEpoch;
+  if (!force && codes.join(',') === state.activeCodes.join(',') && codes.every(code => state.regions.has(code))) { state.loading = false; render(); return; }
   state.activeCodes = codes;
   state.loading = true;
   state.partialError = '';
@@ -409,6 +461,7 @@ function favorite(id) {
 function selectStation(id, { preserveView = false, origin = 'list' } = {}) {
   const station = allStations().find(item => item.id === id);
   if (!station) return;
+  cancelMapSearch();
   state.navigationRevision++;
   state.selectedId = id;
   preserveSelectedView = preserveView;
@@ -523,28 +576,7 @@ function setMobileView(view) {
 
 async function initializeMap() {
   try {
-    map = await createMap({ container: $('map'), config, onSelect: id => selectStation(String(id), { origin: 'map' }), onBoundsChange: bounds => {
-      // The first idle event finishes SDK centering of the consented location.
-      // Keep the applied search region in sync before enabling manual searches.
-      if (!initialBoundsConsumed) {
-        initialBoundsConsumed = true;
-        state.bounds = bounds;
-        appliedBounds = bounds;
-        state.center = map?.getCenter() || state.center;
-        mapSearchPending = false;
-        updateMapSearchButton();
-        if (state.manifest) render();
-        return;
-      }
-      state.navigationRevision++;
-      state.bounds = bounds;
-      state.center = map?.getCenter() || { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
-      // Do not change the loaded region/list while the user is panning.
-      // The explicit overlay button applies the new viewport on demand.
-      clearTimeout(boundsTimer);
-      mapSearchPending = true;
-      updateMapSearchButton();
-    }, onBackgroundClick: () => { if ($('stationDialog').open) closeDetails(); }, onError: error => { if (error?.recoverable) return; $('mapMessage').textContent = error?.message || '지도를 불러오지 못했습니다. 충전소 목록을 이용해 주세요.'; $('mapMessage').hidden = false; } });
+    map = await createMap({ container: $('map'), config, onSelect: id => selectStation(String(id), { origin: 'map' }), onBoundsChange: mapBoundsChanged, onBackgroundClick: () => { if ($('stationDialog').open) closeDetails(); }, onError: error => { if (error?.recoverable) return; $('mapMessage').textContent = error?.message || '지도를 불러오지 못했습니다. 충전소 목록을 이용해 주세요.'; $('mapMessage').hidden = false; } });
     const selected = currentStation();
     if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
     else if (sharedView) map.setCenter(sharedView.center, sharedView.zoom);
@@ -585,25 +617,15 @@ function bindEvents() {
   });
   $('searchThisArea').addEventListener('click', async () => {
     if (state.loading || !state.bounds) return;
-    clearTimeout(boundsTimer);
-    mapSearchPending = false;
-    appliedBounds = map?.getBounds?.() || state.bounds;
-    state.bounds = appliedBounds;
-    state.center = map?.getCenter?.() || state.center;
-    state.region = 'auto';
-    $('regionSelect').value = 'auto';
-    state.sharedId = null;
-    state.listLimit = 60;
-    updateMapSearchButton();
-    await loadRegions();
-    $('listContent').scrollTop = 0;
+    state.bounds = map?.getBounds?.() || state.bounds;
+    await searchCurrentMap();
   });
   $('regionSelect').addEventListener('change', async event => {
     state.navigationRevision++;
     state.region = event.target.value; state.sharedId = null; state.listLimit = 60;
-    mapSearchPending = false;
+    cancelMapSearch();
     appliedBounds = null;
-    updateMapSearchButton();
+    if (state.region === 'auto') appliedBounds = state.bounds = map?.getBounds() || state.bounds;
     showRegionOnMap();
     await loadRegions();
   });
@@ -649,6 +671,7 @@ function bindEvents() {
   $('listTab').addEventListener('click', () => setMobileView('list'));
   $('locateButton').addEventListener('click', async () => {
     const revision = ++state.navigationRevision;
+    cancelMapSearch();
     $('locateButton').disabled = true;
     try {
       const point = await requestLocation();

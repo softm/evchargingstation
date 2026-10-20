@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, access, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { compressRegionFiles } from '../scripts/compress-data.mjs';
-import { decodeJsonData } from '../public/js/data.js';
+import { DataClient, decodeJsonData } from '../public/js/data.js';
 
 const prefix = 'releases/20261020T120000-abcdef0123/regions/';
 
@@ -60,4 +60,44 @@ test('Parser handles gzip, plain JSON and CDN already-decoded responses', async 
   assert.deepEqual(await decodeJsonData(new Response(bytes, { headers: { 'Content-Encoding': 'gzip' } })), region);
   await assert.rejects(decodeJsonData(new Response(Buffer.from('not JSON'))), /해석/);
   await assert.rejects(decodeJsonData(new Response(Buffer.from('{}'))), /형식/);
+});
+
+function dataClient(t) {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'https://example.test/' } });
+  t.after(() => { if (previous) Object.defineProperty(globalThis, 'location', previous); else delete globalThis.location; });
+  return new DataClient();
+}
+
+test('rapid viewport changes share an in-flight shard and reuse the decoded cache', async t => {
+  const client = dataClient(t);
+  let complete;
+  let requests = 0;
+  client.request = () => { requests++; return new Promise(resolve => { complete = resolve; }); };
+  const entry = { code: '11', path: prefix + '11.json.gz' };
+  const first = client.region(entry);
+  const second = client.region(entry);
+  assert.equal(requests, 1);
+  complete({ regionCode: '11', stations: [{ id: '000001', regionCode: '11', chargers: [{ id: '01', type: '4' }] }] });
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(a, b);
+  assert.equal(a.stations[0].id, '000001');
+  assert.equal(a.stations[0].chargers[0].type, '04');
+  assert.equal(await client.region(entry), a);
+  assert.equal(requests, 1);
+  assert.equal(client.pendingRegions.size, 0);
+});
+
+test('failed shared shard requests are cleared so the next map search can retry', async t => {
+  const client = dataClient(t);
+  const entry = { code: '11', path: prefix + '11.json.gz' };
+  let requests = 0;
+  client.request = async () => { requests++; throw new Error('temporary failure'); };
+  const failed = await Promise.allSettled([client.region(entry), client.region(entry)]);
+  assert.ok(failed.every(result => result.status === 'rejected'));
+  assert.equal(requests, 1);
+  assert.equal(client.pendingRegions.size, 0);
+  client.request = async () => { requests++; return { regionCode: '11', stations: [] }; };
+  assert.deepEqual((await client.region(entry)).stations, []);
+  assert.equal(requests, 2);
 });

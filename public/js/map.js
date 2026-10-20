@@ -48,12 +48,19 @@ export function escapeHtml(value) {
 /** SOFTM-EV-VIEWPORT START 날짜:20261019 : 선택 이후 늦은 idle·크기 변경이 목록과 번호를 다시 바꾸지 않도록 실제 탐색 요청만 소비 */
 export function createViewportGate() {
   let preserved = false;
-  let pending = false;
+  let pending = null;
+  function consumeChange() {
+    if (preserved || !pending) return null;
+    const source = pending;
+    pending = null;
+    return source;
+  }
   return {
-    preserve() { preserved = true; pending = false; },
-    userChange() { preserved = false; pending = true; },
-    resize() { if (!preserved) pending = true; },
-    consume() { if (preserved || !pending) return false; pending = false; return true; },
+    preserve() { preserved = true; pending = null; },
+    userChange(source) { preserved = false; pending = source === 'programmatic' ? source : 'user'; },
+    resize() { if (!preserved && !pending) pending = 'resize'; },
+    consume() { return Boolean(consumeChange()); },
+    consumeChange,
     isPreserved() { return preserved; }
   };
 }
@@ -376,14 +383,17 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
     boundsTimer = setTimeout(() => {
       if (!engine || destroyed || !canvas.clientWidth || !canvas.clientHeight) return;
       const bounds = engine.getBounds();
-      if (bounds && gate.consume()) onBoundsChange(bounds);
+      if (bounds) {
+        const source = gate.consumeChange();
+        if (source) onBoundsChange(bounds, { source });
+      }
     }, 350);
   }
 
-  function userChange() {
+  function userChange(source) {
     if (destroyed) return;
     cancelAnimationFrame(focusFrame);
-    gate.userChange();
+    gate.userChange(source);
     clearTimeout(boundsTimer);
     clearTimeout(drawTimer);
   }
@@ -517,7 +527,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
     getZoom() { return engine?.getZoom() ?? requestedView.zoom; }, // SOFTM-EV-SHARE-ZOOM 날짜:20261019 : 공유 링크가 현재 지도 배율을 그대로 복원하도록 공개 인터페이스에 전달
     setCenter(point, zoom) {
       if (!isCoordinate(point) || destroyed) return false;
-      userChange();
+      userChange('programmatic');
       requestedView = { point: { lat: point.lat, lng: point.lng }, zoom: Math.max(6, Math.min(19, Number.isFinite(zoom) ? zoom : engine?.getZoom() || 14)) };
       engine?.setView(requestedView.point, requestedView.zoom);
       settled();

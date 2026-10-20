@@ -61,6 +61,31 @@ test('상세를 위한 내부 이동 이후 idle과 resize는 기존 목록을 �
   assert.equal(gate.consume(), true);
 });
 
+test('지역 중심 이동과 실제 첫 지도 탐색을 구분하고 resize가 탐색 의도를 덮지 않는다', () => {
+  const gate = createViewportGate();
+  gate.userChange('programmatic');
+  gate.resize();
+  assert.equal(gate.consumeChange(), 'programmatic');
+  assert.equal(gate.consumeChange(), null);
+  gate.userChange();
+  gate.resize();
+  assert.equal(gate.consumeChange(), 'user');
+  gate.resize();
+  assert.equal(gate.consumeChange(), 'resize');
+});
+
+test('선택 위치 보존 후 첫 실제 드래그·확대는 한 번만 자동 조회할 수 있다', () => {
+  const gate = createViewportGate();
+  gate.userChange('programmatic');
+  gate.preserve();
+  gate.resize();
+  assert.equal(gate.consumeChange(), null);
+  gate.userChange({ type: 'dragstart' });
+  gate.userChange({ type: 'wheel' });
+  assert.equal(gate.consumeChange(), 'user');
+  assert.equal(gate.consumeChange(), null);
+});
+
 test('지도 영역 경계의 충전소를 누락하지 않으며 잘못된 사각형은 조회하지 않는다', () => {
   const bounds = { south: 37, north: 38, west: 126, east: 128 };
   assert.equal(containsCoordinate(bounds, { lat: 37, lng: 126 }), true);
