@@ -1,26 +1,58 @@
-/* SOFTM-DETAIL-GUIDE 날짜:20261021 : 좁은 화면에서도 표의 가로 스크롤 없이 읽는 충전기 카드. */
-.detail-status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:12px 0}
-.detail-status{padding:10px 5px;text-align:center;border:1px solid #e2e9e5;border-radius:10px;background:#f5f7f6;min-width:0;display:flex;flex-direction:column;gap:5px;color:#66786c;font-size:11px}
-.detail-status strong{font-size:25px;line-height:1.15;font-variant-numeric:tabular-nums;color:var(--ink)}
-.detail-status strong small{font-size:11px;margin-left:3px;font-weight:500}.detail-status>small{font-size:9px;line-height:1.5}
+/* 충전소 상세: 상태의 범위와 자료 유무를 먼저 알리고, 긴 기록은 접어서 제공한다. */
+.station-dialog{scroll-padding-top:88px}
+.detail-toolbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:12px;padding:8px 16px 8px 24px;background:#fff;border-bottom:1px solid var(--line)}
+.detail-toolbar h2{flex:1;min-width:0;margin:0;font-size:19px;line-height:1.5;letter-spacing:-.5px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.detail-toolbar .close-detail{flex:none;width:44px;height:44px}
+.detail-top{padding:16px 24px 20px}.detail-top .detail-eyebrow{font-size:12px;margin:0 0 6px;overflow-wrap:anywhere;letter-spacing:0}
+.detail-address{font-size:14px;color:#52695c;overflow-wrap:anywhere;line-height:1.7}.detail-address .icon-button{width:44px;height:44px;margin:-8px 0;vertical-align:middle}
+.detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) 44px 44px;gap:8px;margin-top:14px}
+.detail-actions .button{min-width:0;min-height:44px;padding:8px;font-size:12px;white-space:normal;line-height:1.5}
+.detail-actions .icon-only{min-width:44px}.detail-actions>.button:only-child{grid-column:1/-1}
+.detail-section h3{font-size:16px;line-height:1.5;margin-bottom:14px}
+.detail-status-lead{display:flex;flex-direction:column;gap:5px;padding:14px;background:#f4f7f5;border-radius:10px;line-height:1.65;overflow-wrap:anywhere}
+.detail-status-lead>span,.detail-status-lead>small{font-size:12px;color:#53695d}
+.detail-status-lead>strong{font-size:17px;color:#284f3a;font-weight:700}.detail-status-lead.unknown>strong{color:#795b27}
+.detail-status-scope{font-size:12px;color:#53695d;margin:14px 0 6px;line-height:1.6}
+.detail-status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0}
+.detail-status{padding:12px 5px;text-align:center;border:1px solid #dbe5de;border-radius:9px;background:#f5f7f6;min-width:0;display:flex;flex-direction:column;gap:6px;color:#52675b;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.detail-status strong{font-size:26px;line-height:1.2;font-variant-numeric:tabular-nums;color:var(--ink)}
+.detail-status strong small{font-size:12px;margin-left:3px;font-weight:500}
 .detail-status.available{background:#eaf7f1;border-color:#c1e7d4;color:#087b5d}.detail-status.available strong{color:#087b5d}
-.detail-status.charging{background:#eff3fd;border-color:#d4e0f6;color:#3d62b6}.detail-status.charging strong{color:#3d62b6}
-.detail-status.unknown{background:#fff8e9;border-color:#eadbb7;color:#806535}
-.detail-explanation{font-size:11px;color:#697e72;line-height:1.8;margin:10px 0 0;overflow-wrap:anywhere}
-.detail-explanation strong{font-weight:600;color:#806535}
-.visit-checks{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}.visit-checks span{font-size:11px;line-height:1.6;border:1px solid #e0e8e2;padding:4px 8px;border-radius:6px;background:#f7faf8}.visit-checks .warning{background:#fff7e7;border-color:#eddbb9;color:#806535}
-.charger-section-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.charger-section-heading h3{margin:0}.charger-section-heading>span{font-size:11px;color:#60776b}
-.charger-detail{padding:16px 0;border-bottom:1px solid var(--line);min-width:0}.charger-detail:first-of-type{padding-top:4px}.charger-detail:last-child{border-bottom:0;padding-bottom:0}
-.charger-detail-heading{display:flex;gap:10px;align-items:center;justify-content:space-between}.charger-detail h4{font-size:13px;line-height:1.6;margin:0}.charger-detail .charger-status{font-size:11px;line-height:1.5;flex:none}
-.charger-status.charging{background:#edf2fe;color:#3d62b6}.charger-status.unavailable{background:#fdf0ee;color:#a64e42}
-.charger-connector{margin:5px 0 7px;font-weight:650;font-size:14px;line-height:1.6;overflow-wrap:anywhere}.bus-only{display:inline-block;font-size:10px;margin-left:7px;color:#996322;background:#fff6e6;padding:1px 5px;border-radius:4px}
-.charger-spec{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:11px;color:#6b7c72}.charger-spec strong{font-size:12px;color:#3d5b4c}
-.charger-position{font-size:11px;line-height:1.7;margin:8px 0;color:#74837a}.charger-position strong{font-weight:500;color:#435d4d;overflow-wrap:anywhere}
-.charger-prices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0}.charger-prices>div{background:#f5f8f6;padding:9px 10px;border-radius:7px;min-width:0}.charger-prices dt{font-size:10px;color:#6b7e72;margin-bottom:3px}.charger-prices dd{margin:0;display:flex;flex-direction:column;gap:3px;line-height:1.6}.charger-prices strong{font-size:12px;overflow-wrap:anywhere}.charger-prices dd small{font-size:9px;color:#718378}.price-unknown{font-size:12px;color:#697d71}
-.charger-price-help{font-size:10px;line-height:1.7;color:#74867b;margin:6px 0 9px}.charger-confirmed{font-size:11px;line-height:1.8;margin:8px 0;color:#5e7767}.charger-confirmed time{font-variant-numeric:tabular-nums}.charger-confirmed span{color:#8b6b35}
-.charger-technical{font-size:10px;color:#718276;line-height:1.8}.charger-technical summary{padding:5px 0;min-height:30px;color:#546e5c}.charger-technical dl{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px;margin:10px 0}.charger-technical dt,.charger-technical dd{margin:0}.charger-technical dd{overflow-wrap:anywhere}.charger-technical p{margin:8px 0}
-.charging-guide{margin:12px 0 0;border:1px solid #dce6df;border-radius:9px;font-size:11px;color:#5e7566;line-height:1.8;overflow:hidden}.charging-guide summary{padding:10px 12px;min-height:40px;background:#f5f9f6;color:#345b46;font-weight:600}.charging-guide dl{margin:12px}.charging-guide dt{font-weight:650;color:#365743;margin-top:10px}.charging-guide dt:first-child{margin-top:0}.charging-guide dd{margin:3px 0 10px;overflow-wrap:anywhere}.charging-guide p{margin:12px}
-.reference-price-table{width:calc(100% - 24px);border-collapse:collapse;margin:12px;font-size:11px;table-layout:fixed}.reference-price-table caption{text-align:left;font-size:10px;color:#6e8375;margin-bottom:8px}.reference-price-table th,.reference-price-table td{padding:8px 4px;text-align:left;border-bottom:1px solid #e5ece7;font-weight:500;overflow-wrap:anywhere}.reference-price-table td{text-align:right}.reference-price-table th small{display:block;font-size:10px;font-weight:400;color:#748579}.charging-guide a{text-decoration:underline;text-underline-offset:3px}
-.tariff-guidance{font-size:11px;line-height:1.8;color:#627a6b}.tariff-guidance p{margin:0 0 9px}.detail-info dd,.detail-info dt{overflow-wrap:anywhere}.detail-info dd{word-break:normal}.detail-info .info-multiline{white-space:pre-line}.detail-top h2{overflow-wrap:anywhere}.detail-top .detail-eyebrow{font-size:11px}
+.detail-status.charging{background:#eff3fd;border-color:#d4e0f6;color:#345aaa}.detail-status.charging strong{color:#345aaa}
+.detail-status.unknown{background:#fff8e9;border-color:#eadbb7;color:#795b27}
+.detail-status.is-zero{background:#f7f9f8;border-color:#e0e7e2;color:#627268}.detail-status.is-zero strong{color:#627268}
+.detail-explanation,.detail-freshness{font-size:12px;color:#53695d;line-height:1.8;margin:10px 0 0;overflow-wrap:anywhere}
+.detail-explanation strong{font-weight:600;color:#795b27}
+.visit-checks{display:flex;flex-wrap:wrap;gap:7px;margin:0}.visit-checks span{font-size:13px;line-height:1.7;border:1px solid #dce6df;padding:5px 9px;border-radius:6px;background:#f7faf8;overflow-wrap:anywhere}
+.visit-checks .warning{background:#fff7e7;border-color:#eddbb9;color:#795b27}.visit-restriction{margin:12px 0 0;font-size:14px;line-height:1.7;color:#795b27;white-space:pre-line;overflow-wrap:anywhere}
+.charger-section-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.charger-section-heading h3{margin:0}.charger-section-heading>span{font-size:12px;color:#53695d;flex:none}
+.charger-detail{padding:18px 0;border-bottom:1px solid var(--line);min-width:0}.charger-detail:first-of-type{padding-top:4px}.charger-detail:last-child{border-bottom:0;padding-bottom:0}
+.charger-detail-heading{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.charger-detail h4{font-size:15px;line-height:1.6;margin:0;overflow-wrap:anywhere;min-width:0}
+.charger-detail .charger-status{font-size:12px;line-height:1.5;flex:none}
+.charger-status.charging{background:#edf2fe;color:#345aaa}.charger-status.unavailable{background:#fdf0ee;color:#9a4439}.charger-status.unknown{color:#795b27}
+.charger-filter-match{font-size:12px;color:#5b6e62;line-height:1.5;margin:6px 0}.charger-filter-match.matches{color:#087b5d;font-weight:650}
+.charger-connector{margin:6px 0;font-weight:650;font-size:16px;line-height:1.6;overflow-wrap:anywhere}.bus-only{display:inline-block;font-size:12px;margin-left:7px;color:#80521d;background:#fff6e6;padding:1px 5px;border-radius:4px}
+.charger-spec{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:12px;color:#53695d}.charger-spec strong{font-size:14px;color:#34553f}
+.charger-position{font-size:14px;line-height:1.75;margin:8px 0;color:#53695d}.charger-position strong{font-weight:500;color:#34553f;overflow-wrap:anywhere}
+.charger-prices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0}.charger-prices>div{background:#f5f8f6;padding:10px;border-radius:7px;min-width:0}.charger-prices dt{font-size:12px;color:#53695d;margin-bottom:3px}.charger-prices dd{margin:0;display:flex;flex-direction:column;gap:3px;line-height:1.6}.charger-prices strong{font-size:14px;overflow-wrap:anywhere}.charger-prices dd small{font-size:12px;color:#53695d}.price-unknown{font-size:14px;color:#53695d}
+.charger-confirmed{font-size:12px;line-height:1.8;margin:10px 0 0;color:#53695d;overflow-wrap:anywhere}.charger-confirmed time{font-variant-numeric:tabular-nums}.charger-confirmed span{color:#795b27}
+.charger-fee-missing{font-size:12px;line-height:1.8;color:#795b27;margin:10px 0 0}
+.charger-technical{font-size:12px;color:#53695d;line-height:1.8}.charger-technical summary{padding:12px 0;min-height:44px;color:#34553f}.charger-technical dl{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px;margin:10px 0}.charger-technical dt,.charger-technical dd{margin:0}.charger-technical dd{overflow-wrap:anywhere}.charger-technical p{margin:8px 0}
+.charging-guide{margin:12px 0 0;border:1px solid #dce6df;border-radius:9px;font-size:14px;color:#53695d;line-height:1.8;overflow:hidden}.charging-guide summary{padding:11px 12px;min-height:44px;background:#f5f9f6;color:#34553f;font-weight:600}.charging-guide dl{margin:14px}.charging-guide dt{font-weight:650;color:#34553f;margin-top:12px}.charging-guide dt:first-child{margin-top:0}.charging-guide dd{margin:3px 0 12px;overflow-wrap:anywhere}.charging-guide p{margin:14px;overflow-wrap:anywhere}
+.reference-price-table{width:calc(100% - 28px);border-collapse:collapse;margin:14px;font-size:14px;table-layout:fixed}.reference-price-table caption{text-align:left;font-size:12px;color:#53695d;margin-bottom:8px}.reference-price-table th,.reference-price-table td{padding:10px 4px;text-align:left;border-bottom:1px solid #e0e7e2;font-weight:500;overflow-wrap:anywhere}.reference-price-table td{text-align:right}.reference-price-table th small{display:block;font-size:12px;font-weight:400;color:#53695d}.charging-guide a{text-decoration:underline;text-underline-offset:3px}
+.tariff-guidance{font-size:14px;line-height:1.8;color:#53695d}.tariff-guidance p{margin:0 0 10px}.tariff-unavailable{padding:14px;border:1px solid #e5dcc6;border-radius:10px;background:#fffbf2}.tariff-unavailable strong{color:#795b27}
+.station-dialog .official-fee{display:inline-flex;align-items:center;min-height:44px;line-height:1.7;font-size:14px;margin:0;overflow-wrap:anywhere}
+.detail-info{grid-template-columns:78px minmax(0,1fr);gap:13px 12px;font-size:14px;line-height:1.75}.detail-info dd,.detail-info dt{overflow-wrap:anywhere}.detail-info dt{color:#53695d}.detail-info dd{word-break:normal;color:#34553f}.detail-info dd>a[href^="tel:"]{display:inline-flex;align-items:center;min-height:44px}.detail-info .info-multiline{white-space:pre-line}
+.cost-fields{margin-top:14px}.cost-fields label{font-size:12px}.cost-fields input{min-height:44px;font-size:16px}.cost-result{font-size:16px;line-height:1.6;overflow-wrap:anywhere}
+.nearby-station{min-height:44px}.nearby-station strong{font-size:14px}.nearby-station span,.nearby-station small{font-size:12px}
+.detail-foot{font-size:12px;color:#53695d;overflow-wrap:anywhere}.detail-id{font-size:12px}.detail-demo{font-size:12px}
 @media(min-width:1101px){.station-dialog{width:470px}}
-@media(max-width:360px){.detail-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-status{padding:8px 4px}.charger-prices{gap:6px}.charger-prices>div{padding:8px}.charger-technical dl{grid-template-columns:92px minmax(0,1fr)}}
+@media(max-width:760px){
+  .station-dialog::before{display:none}
+  .detail-toolbar{padding:8px 12px 8px 16px}.detail-toolbar h2{font-size:18px}
+  .detail-top,.detail-section{padding:18px 16px}.detail-foot{padding:16px}
+  .detail-status-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .detail-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .detail-actions .button{font-size:14px}.detail-actions .icon-only{width:100%}
+}
+@media(max-width:360px){.charger-technical dl{grid-template-columns:1fr;gap:3px}.charger-technical dd{margin-bottom:8px}.detail-info{grid-template-columns:70px minmax(0,1fr);gap:12px 8px}}
