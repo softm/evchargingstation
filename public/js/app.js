@@ -37,6 +37,7 @@ let initialLocation = null;
 let locationFailure = '';
 let locationRequest = null;
 let initialBoundsConsumed = false;
+let initialRegionPending = !demo && state.region !== 'auto' && !sharedView && !state.sharedId;
 
 /** Handle hidden/zero-size maps and asynchronous SDK centering at startup. */
 function initialVisibleBounds(center, sdkBounds, zoom = 14) {
@@ -233,6 +234,18 @@ function fillRegions() {
   $('regionSelect').value = state.region;
 }
 
+function showRegionOnMap() {
+  const entry = state.manifest?.regions.find(region => String(region.code) === state.region);
+  const center = entry?.center || (entry?.bounds && {
+    lat: (entry.bounds.south + entry.bounds.north) / 2,
+    lng: (entry.bounds.west + entry.bounds.east) / 2,
+  });
+  if (!hasCoordinates(center)) return;
+  appliedBounds = null;
+  state.center = center;
+  map?.setCenter(center, 10);
+}
+
 function regionEntries() {
   const entries = state.manifest?.regions || [];
   if (state.region !== 'auto') return entries.filter(region => String(region.code) === state.region);
@@ -308,6 +321,9 @@ async function refresh() {
       if (state.manifest.mode === 'demo') throw new Error('실제 데이터 연결을 확인해 주세요.');
     }
     fillRegions();
+    // Region links arrive before the manifest. Center once when its region is
+    // known, preserving shared map positions and later pans or refreshes.
+    if (initialRegionPending) { initialRegionPending = false; showRegionOnMap(); }
     await loadRegions(true);
   } catch (error) { state.error = error.message || '네트워크 연결을 확인해 주세요.'; state.loading = false; render(); }
 }
@@ -553,8 +569,7 @@ function bindEvents() {
     mapSearchPending = false;
     appliedBounds = null;
     updateMapSearchButton();
-    const entry = state.manifest?.regions.find(region => String(region.code) === state.region);
-    if (entry?.bounds) { const bounds = entry.bounds; state.center = { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 }; map?.setCenter(state.center, 10); }
+    showRegionOnMap();
     await loadRegions();
   });
   $('listContent').addEventListener('click', event => {
