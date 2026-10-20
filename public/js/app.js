@@ -26,6 +26,7 @@ let appliedBounds = null;
 let initialLocation = null;
 let locationFailure = '';
 let locationRequest = null;
+let initialBoundsConsumed = false;
 
 /** Handle hidden/zero-size maps and asynchronous SDK centering at startup. */
 function initialVisibleBounds(center, sdkBounds, zoom = 14) {
@@ -434,6 +435,18 @@ function setMobileView(view) {
 async function initializeMap() {
   try {
     map = await createMap({ container: $('map'), config, onSelect: id => selectStation(String(id), { origin: 'map' }), onBoundsChange: bounds => {
+      // The first idle event finishes SDK centering of the consented location.
+      // Keep the applied search region in sync before enabling manual searches.
+      if (!initialBoundsConsumed) {
+        initialBoundsConsumed = true;
+        state.bounds = bounds;
+        appliedBounds = bounds;
+        state.center = map?.getCenter() || state.center;
+        mapSearchPending = false;
+        updateMapSearchButton();
+        if (state.manifest) render();
+        return;
+      }
       state.navigationRevision++;
       state.bounds = bounds;
       state.center = map?.getCenter() || { lat: (bounds.south + bounds.north) / 2, lng: (bounds.west + bounds.east) / 2 };
@@ -452,7 +465,7 @@ async function initializeMap() {
     // Some SDKs report the previous (Seoul) bounds while moving to a newly
     // acquired user position. Never use those bounds for the first data load.
     const requestedCenter = initialLocation || sharedView?.center || map.getCenter() || state.center;
-    appliedBounds = initialVisibleBounds(requestedCenter, map.getBounds(), map.getZoom());
+    appliedBounds = initialVisibleBounds(requestedCenter, map.getBounds(), initialLocation ? 15 : map.getZoom());
     state.bounds = appliedBounds;
     state.center = requestedCenter;
     mapSearchPending = false;
