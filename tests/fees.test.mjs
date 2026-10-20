@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chargerFee, feeLabel, summarizeFees, facilityName} from '../public/js/fees.js';
+import {chargerFee, feeLabel, summarizeFees, facilityName, facilityDetailName} from '../public/js/fees.js';
 
 const fees = { schemaVersion: 1, source: {url:'https://ev.or.kr/'}, operators: [
   {operatorId:'ME',name:'공공',rates:[
@@ -34,4 +34,11 @@ test('published tariff average does not turn unknown middle-speed range into a f
   assert.equal(feeLabel(chargerFee(data,{operatorId:'AA'},{outputKw:100})), '330~410원/kWh');
   assert.equal(facilityName({facilityKind:'A0'}),'공공시설');
   assert.equal(facilityName({facilityKind:'xx'}),'시설 코드 XX');
+});
+
+test('official facility detail codes are decoded, future codes are shown safely',()=>{
+  assert.equal(facilityDetailName({facilityDetailCode:'H001'}),'아파트');
+  assert.equal(facilityDetailName({facilityDetailCode:'E007'}),'주유소');
+  assert.equal(facilityDetailName({facilityDetailCode:'Z999'}),'상세 코드 Z999');
+  assert.equal(facilityDetailName({}), '');
 });
