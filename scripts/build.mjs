@@ -2,6 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { compressRegionFiles } from './compress-data.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, 'dist');
@@ -25,5 +26,7 @@ for (const key of ['apiBaseUrl', 'dataBaseUrl']) {
 await writeFile(path.join(output, 'config.js'), `/* Public settings only. */\nwindow.EV_CONFIG = Object.freeze(${JSON.stringify(config, null, 2)});\n`);
 const manifest = JSON.parse(await readFile(path.join(output, 'data/manifest.json'), 'utf8'));
 if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Invalid data manifest');
+const compression = await compressRegionFiles(path.join(output, 'data'), manifest);
+await writeFile(path.join(output, 'data/manifest.json'), JSON.stringify(manifest) + '\n');
 await writeFile(path.join(output, 'build-info.json'), JSON.stringify({version:'0.1.0',builtAt:new Date().toISOString(),sourceRevision:process.env.GITHUB_SHA||null,dataMode:manifest.mode},null,2)+'\n');
-console.log(`Built dist/ — ${manifest.mode}, ${manifest.totalStations || 0} stations. No API secret is bundled.`);
+console.log(`Built dist/ — ${manifest.mode}, ${manifest.totalStations || 0} stations. Region bytes ${compression.originalBytes} -> ${compression.publishedBytes}, gzip ${compression.gzipRegions}/${compression.regions}. No API secret is bundled.`);
