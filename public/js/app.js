@@ -322,7 +322,7 @@ function showRegionOnMap() {
     lat: (entry.bounds.south + entry.bounds.north) / 2,
     lng: (entry.bounds.west + entry.bounds.east) / 2,
   });
-  if (!hasCoordinates(center)) return;
+  if (!center || !hasCoordinates(center)) return;
   appliedBounds = null;
   state.center = center;
   map?.setCenter(center, 10);
