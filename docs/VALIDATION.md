@@ -1,5 +1,20 @@
 # 구현과 배포 검증 기록
 
+## 2026-10-20 — 실제 API 인증 오류 진단과 배포 정책 보완
+
+검증 대상은 [`cf3f55e66612aae2613fcb54e9080bb94ddef980`](https://github.com/softm/evchargingstation/commit/cf3f55e66612aae2613fcb54e9080bb94ddef980)의 배포본입니다. 아래의 이전 시각별 기록은 당시 결과이며, 현재 상태는 이 절을 기준으로 확인합니다.
+
+| 항목 | 확인 결과 | 근거 |
+| --- | --- | --- |
+| 자동 검사 | `npm run check`, `npm test`, `npm run build` 통과. JavaScript 19개 + Python 26개 = 45개 테스트 | 로컬 검사와 [진단 배포 실행 39347686696](https://github.com/softm/evchargingstation/actions/runs/39347686696) |
+| 최초 `full` 수집 | 실제 수집 단계가 HTTP 403으로 실패. 당시 `continue-on-error` 설정 때문에 워크플로 전체 성공과 수집 성공이 일치하지 않았음 | [실행 39342978479](https://github.com/softm/evchargingstation/actions/runs/39342978479) |
+| 오류 진단 | HTTP 403 본문을 제한된 크기로 읽고 알려진 제공기관 오류코드만 안전하게 분류하여 코드 `30` 확인. 응답 원문이나 인증정보는 기록하지 않음 | [진단 배포 실행 39347686696](https://github.com/softm/evchargingstation/actions/runs/39347686696) |
+| 공식 포털 미리보기 | `getChargerInfo` 미리보기는 결과코드 `00` / `NORMAL SERVICE.`로 실제 충전기 10건을 반환. GitHub에 저장된 키로 실행한 수집과 결과가 달라 Secret 값 재확인이 필요 | 공공데이터포털의 해당 API 활용신청 상세 화면에서 실행한 공식 미리보기. 인증키가 포함된 요청 주소는 기록하지 않음 |
+| 수동 전체 수집의 배포 조건 | 명시적 `workflow_dispatch` + `collection_mode: full`에서는 수집 설정 활성 및 수집 단계 성공을 모두 요구. 충족하지 않으면 캐시 보존 후 오류로 종료하고 신규 배포 중단 | [수집·배포 워크플로](https://github.com/softm/evchargingstation/blob/cf3f55e66612aae2613fcb54e9080bb94ddef980/.github/workflows/collect-and-deploy.yml) |
+| 코드 배포와 데이터 운영 | 진단 수정본 배포 완료. 실제 충전소 데이터 수집은 인증 오류로 미완료이며 예약 수집·자동 갱신은 비활성 | [진단 배포 실행 39347686696](https://github.com/softm/evchargingstation/actions/runs/39347686696) |
+
+남은 작업은 인증 오류를 해결한 뒤 `full` 수집을 성공시키고 실제 목록·상태·확인 시각을 원본과 대조하는 것입니다. 정상 데이터 검증 후 예약 수집을 활성화합니다. `push`, 수동 `auto`, 예약 실행은 수집 실패 시 기존 snapshot과 확인 시각을 보존하면서 UI 배포를 계속할 수 있습니다. 앱 배포 성공을 실데이터 수집 성공으로 해석하지 않습니다.
+
 ## 2026-10-20 08:19 KST — 수정본 배포 검증
 
 검증 대상은 [`74f9fefa8b0580f56c83a5a1ed2a1a168812e46f`](https://github.com/softm/evchargingstation/commit/74f9fefa8b0580f56c83a5a1ed2a1a168812e46f)의 배포본입니다. 게시 주소 검증기의 `verifiedAt`은 `2026-10-19T23:19:16.447Z`이며, 한국시간으로 2026-10-20 08:19:16.447입니다.
@@ -19,9 +34,9 @@
 | 브라우저 콘솔 | 확인한 시나리오에서 경고 0건·오류 0건 | 브라우저 콘솔 확인 |
 | 실제 API 연결 | Repository/Environment Secret 없음. 실행 환경에 서비스키 없음. 공공데이터포털 로그아웃 상태 확인. 실제 API 호출 미수행 | 비밀 설정 존재 여부와 실행 환경·포털 확인 |
 
-현재 사이트 게시와 위 배포본의 화면 검증은 완료했습니다. 데이터 운영의 미해결 조건은 실제 공공데이터 인증키 연결이며, 키 연결 이후 아래 순서로 운영 검증을 진행해야 합니다.
+08:19 기준으로 사이트 게시와 위 배포본의 화면 검증은 완료했습니다. 당시 데이터 운영의 미해결 조건은 실제 공공데이터 인증키 연결이었으며, 아래 작업을 남겨 두었습니다.
 
-### 현재 남은 데이터 운영 확인
+### 당시 남은 데이터 운영 확인
 
 | 순서 | 작업 | 완료 기준 |
 | --- | --- | --- |

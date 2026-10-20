@@ -2,11 +2,11 @@
 
 [앱 열기](https://softm.github.io/evchargingstation/) · [화면 체험](https://softm.github.io/evchargingstation/?demo=1) · [소스](https://github.com/softm/evchargingstation)
 
-**2026-10-20 배포 재개 확인:** 앱과 체험 화면이 GitHub Pages에서 열리고 네이버 지도가 정상 표시되는 것을 확인했습니다. 공유 화면·상세창과 수집기 오류를 보완했으며 자동 테스트 41개가 통과했습니다. 실제 충전소 데이터는 인증키 등록을 기다리고 있습니다. [검증 결과와 남은 확인 사항](docs/VALIDATION.md)을 참고하세요.
+**2026-10-20 최신 검증:** 앱과 체험 화면은 GitHub Pages에 배포되어 있으며 자동 테스트 45개(JavaScript 19개 + Python 26개), 검사·빌드가 통과했습니다. 실제 API의 HTTP 403 응답에서 오류코드 `30`을 확인했고, 수동 `full` 수집 실패 시 신규 배포를 중단하도록 보완했습니다. 실제 충전소 수집은 인증 오류로 미완료이며 자동 갱신은 비활성입니다. [검증 결과와 남은 확인 사항](docs/VALIDATION.md)을 참고하세요.
 
 한국환경공단의 충전소·충전기 정보를 지도와 목록으로 확인하는 앱입니다. 사용자 소유 [돌봄한눈 소스](https://github.com/softm/homecare-nationwide-care-services-map)의 지도 동작과 작은 공통 모듈을 활용했습니다.
 
-**초기 저장소는 실제 API 인증키가 연결되지 않은 상태입니다.** 기본 화면에 가상의 충전소를 넣지 않습니다. `?demo=1` 화면 체험은 모든 시설명이 `예시`로 표시되는 별도 가상 데이터이며 실제 위치 탐색·충전 판단 자료가 아닙니다. 실제 키 연결 전에는 API 성공, 전국 충전소 수, 운영 중 상태를 검증했다고 보지 않습니다.
+**기본 화면에는 실제 수집을 마친 충전소 데이터만 표시합니다.** 기본 화면에 가상의 충전소를 넣지 않습니다. `?demo=1` 화면 체험은 모든 시설명이 `예시`로 표시되는 별도 가상 데이터이며 실제 위치 탐색·충전 판단 자료가 아닙니다. 정상 수집과 원본 대조 전에는 API 성공, 전국 충전소 수, 운영 중 상태를 검증했다고 보지 않습니다.
 
 ## 구현 범위
 
@@ -46,7 +46,7 @@ python3 -m server --host 127.0.0.1 --port 8000
 2. [Actions Secrets](https://github.com/softm/evchargingstation/settings/secrets/actions)에 `DATA_GO_KR_SERVICE_KEY`를 등록합니다. 브라우저에 전달되지 않는 서버용 키입니다.
 3. [Actions](https://github.com/softm/evchargingstation/actions/workflows/collect-and-deploy.yml)에서 `Run workflow` → `collection_mode: full`을 실행합니다.
 4. 앱의 실제 충전소 수, 수집 시각, 지역 분할 로딩, 임의의 실제 충전기 상태를 원본과 대조합니다. 호출 허용량도 확인합니다.
-5. [Actions Variables](https://github.com/softm/evchargingstation/settings/variables/actions)에 `ENABLE_SCHEDULED_COLLECTION=true`를 등록하면 5분 간격 예약 수집 대상이 됩니다. 키 연결 전에는 예약 수집을 켜지 않습니다.
+5. [Actions Variables](https://github.com/softm/evchargingstation/settings/variables/actions)에 `ENABLE_SCHEDULED_COLLECTION=true`를 등록하면 5분 간격 예약 수집 대상이 됩니다. 최초 `full` 수집과 실제 응답 검증이 끝난 뒤에만 예약 수집을 켭니다.
 
 | 설정 | 구분 | 기본값·용도 |
 | --- | --- | --- |
