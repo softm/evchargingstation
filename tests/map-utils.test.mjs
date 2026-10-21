@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildMarkerModels, containsCoordinate, createViewportGate, isCoordinate, labelBudget, markerHtml, markerScale, normalizeBounds, parseSharedView, selectMarkerModels } from '../public/js/map.js';
+import { buildMarkerModels, compareMarkerLabels, containsCoordinate, createViewportGate, isCoordinate, labelBudget, markerDetailLevel, markerHtml, markerScale, normalizeBounds, parseSharedView, planMarkerLabels, selectMarkerModels } from '../public/js/map.js';
 
 test('좌표 미제공·빈 문자열·NaN을 실제 0도 위치로 바꾸지 않는다', () => {
   for (const point of [null, {}, { lat: null, lng: null }, { lat: '', lng: '' }, { lat: '37.5', lng: '127' }, { lat: NaN, lng: 127 }, { lat: 91, lng: 127 }, { lat: 0, lng: 0 }]) assert.equal(isCoordinate(point), false);
@@ -144,4 +144,39 @@ test('돌봄한눈 배율 단계에 맞춰 점·핀·이름·상세 레벨을 �
   assert.deepEqual([10, 13, 14, 15, 16, 17, 18, 19].map(markerScale), ['dot','dot','pin','pin','name','name','detail','detail']);
   assert.ok(labelBudget(12,800,600) <= labelBudget(16,800,600));
   assert.ok(labelBudget(18,800,600) <= 40);
+  assert.equal(labelBudget(18,0,600),0);
+  assert.deepEqual([13,14,15,16,17,18,19].map(markerDetailLevel),[0,0,0,1,1,2,2]);
+});
+
+test('확대 마커 정보는 확인 지연과 조건 일치 수·최대 출력을 보존하고 HTML을 이스케이프한다', () => {
+  const station={id:'000A',name:'<충전소>',lat:37.5,lng:127};
+  const model=buildMarkerModels([station],{summaries:new Map([['000A',{total:8,matching:2,available:0,maxPower:50,label:'현재 상태 확인 필요',tone:'unknown'}]])})[0];
+  assert.equal(model.facts,'전체 8기 · 조건 일치 2기 · 조건 최대 50kW');
+  const html=markerHtml(model);
+  assert.match(html,/ev-map-marker/);assert.match(html,/ev-map-label-context/);assert.match(html,/ev-map-label-detail/);
+  assert.match(html,/&lt;충전소&gt;/);assert.match(html,/현재 상태 확인 필요/);
+  assert.equal(html.includes('ev-map-pin-number'),false);
+  assert.equal(buildMarkerModels([station])[0].facts,'전체 기수 미확인');
+});
+
+test('이름 배치는 선택·이전 표시·고유 ID 순서로 안정적이며 예산 밖 선택 이름도 보존한다', () => {
+  const retained=new Map([['B','right']]);
+  const items=[{id:'C',selected:false},{id:'B',selected:false},{id:'A',selected:true}];
+  assert.deepEqual([...items].sort((a,b)=>compareMarkerLabels(a,b,retained)).map(x=>x.id),['A','B','C']);
+  assert.deepEqual([...items].reverse().sort((a,b)=>compareMarkerLabels(a,b,retained)).map(x=>x.id),['A','B','C']);
+  const rect=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
+  const candidates=items.map((item,i)=>({...item,pin:rect(60+i*130,170,26,26),rects:[rect(35+i*130,136,80,24)]}));
+  const plan=planMarkerLabels(candidates,rect(0,0,500,400),[],candidates.map(x=>x.pin),retained,0);
+  assert.deepEqual([...plan.keys()],['A']);
+});
+
+test('이름을 먼저 예약하고 큰 상태 카드가 이웃 이름을 가리면 작은 단계로 되돌린다', () => {
+  const rect=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
+  const bounds=rect(0,0,400,300),pin=rect(180,180,26,26);
+  const candidates=[{id:'A',selected:false,pin,rects:[rect(150,146,86,24),rect(90,90,206,80),rect(-50,-10,500,180)]}];
+  const result=planMarkerLabels(candidates,bounds,[],[pin],new Map(),1).get('A');
+  assert.equal(result.level,1,'oversized detail falls back to the supported status card');
+  assert.ok(result.rect.left>=8&&result.rect.right<=392);
+  const blocked=planMarkerLabels(candidates,bounds,[bounds],[pin],new Map(),1);
+  assert.equal(blocked.size,0,'an ordinary label cannot cover a map control or detail panel');
 });

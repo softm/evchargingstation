@@ -217,3 +217,15 @@ jobs:
           name: evchargingstation-ad-verification
           path: verification/ads
           retention-days: 7
+      - name: Verify zoom-dependent markers and station selection
+        if: github.event_name != 'schedule'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.page_url }}
+        run: node scripts/verify-markers-browser.mjs
+      - name: Keep marker screenshots and results
+        if: always() && github.event_name != 'schedule'
+        uses: actions/upload-artifact@v5.0.0
+        with:
+          name: evchargingstation-marker-verification
+          path: verification/markers
+          retention-days: 7

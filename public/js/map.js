@@ -67,10 +67,36 @@ export function createViewportGate() {
 /** SOFTM-EV-VIEWPORT END */
 
 export const markerScale = zoom => zoom < 14 ? 'dot' : zoom < 16 ? 'pin' : zoom < 18 ? 'name' : 'detail';
+export const markerDetailLevel = zoom => zoom >= 18 ? 2 : zoom >= 16 ? 1 : 0;
 export const labelBudget = (zoom, width = 800, height = 600) => {
+  if (!(width > 0 && height > 0)) return 0;
   const cap = zoom < 12 ? 6 : zoom < 14 ? 12 : zoom < 16 ? 24 : 40;
-  return Math.max(1, Math.min(cap, Math.floor(Math.max(1, width) * Math.max(1, height) / (zoom < 14 ? 32000 : zoom < 16 ? 24000 : 16000))));
+  return Math.max(1, Math.min(cap, Math.floor(width * height / (zoom < 12 ? 50000 : zoom < 14 ? 35000 : zoom < 16 ? 24000 : 16000))));
 };
+export const compareMarkerLabels = (a, b, retained = new Map()) => Number(b.selected) - Number(a.selected)
+  || Number(retained.has(b.id)) - Number(retained.has(a.id)) || a.id.localeCompare(b.id);
+// SOFTM-EV-MARKER-SCALE 날짜:20261021 : 돌봄한눈처럼 이름을 먼저 확보하고 남는 공간에서 상태·출력 정보를 확장
+export function planMarkerLabels(candidates, bounds, controls, pins, retained, budget) {
+  const occupied = new Map(), placements = new Map();
+  const ordered = [...candidates].sort((a, b) => compareMarkerLabels(a, b, retained));
+  const obstacles = id => [...pins, ...controls, ...[...occupied].filter(([other]) => other !== id).map(([, rect]) => rect)];
+  let remaining = budget;
+  for (const item of ordered) {
+    if (!item.selected && remaining <= 0) continue;
+    let result = globalThis.CareMarkerPlacement.fit(item.rects.slice(0, 1), item.pin, bounds, obstacles(item.id), retained.get(item.id));
+    if (!result && item.selected) result = globalThis.CareMarkerPlacement.fit(item.rects.slice(0, 1), item.pin, bounds, controls);
+    if (!result) continue;
+    placements.set(item.id, result);occupied.set(item.id, result.rect);
+    if (!item.selected) remaining--;
+  }
+  for (const item of ordered) {
+    const previous = placements.get(item.id);
+    if (!previous) continue;
+    const result = globalThis.CareMarkerPlacement.fit(item.rects, item.pin, bounds, obstacles(item.id), previous.side) || previous;
+    placements.set(item.id, result);occupied.set(item.id, result.rect);
+  }
+  return placements;
+}
 const nonNegativeCount = value => Number.isInteger(value) && value >= 0 ? value : null;
 
 export function buildMarkerModels(stations, { selectedId, summaries = new Map() } = {}) {
@@ -85,8 +111,13 @@ export function buildMarkerModels(stations, { selectedId, summaries = new Map() 
     const confirmed = total != null && available != null && available <= total;
     const tone = confirmed && ['available', 'charging', 'unavailable', 'unknown', 'restricted'].includes(summary?.tone) ? summary.tone : 'unknown';
     const label = String(summary?.label || '상태 미확인');
+    const matching = nonNegativeCount(summary?.matching);
+    const power = Number.isFinite(summary?.maxPower) && summary.maxPower > 0 ? summary.maxPower : null;
+    const facts = [`전체 ${total !== null ? `${total}기` : '기수 미확인'}`];
+    if (matching !== null && total !== null && matching < total) facts.push(`조건 일치 ${matching}기`);
+    if (power !== null) facts.push(`조건 최대 ${power}kW`);
     return [{ id, station, number: index + 1, selected: String(selectedId ?? '') === id, tone,
-      count: total !== null ? `${total}기` : '—', label }];
+      count: total !== null ? `${total}기` : '—', label, facts: facts.join(' · ') }];
   });
 }
 
@@ -138,7 +169,7 @@ export function selectMarkerModels(stations, bounds, { selectedId, summaries = n
 
 export function markerHtml(model) {
   const description = `${model.station.name || '이름 미제공 충전소'}. ${model.label}. 총 ${model.count}`;
-  return `<button type="button" class="ev-map-pin ev-map-pin--${model.tone}${model.selected ? ' is-selected' : ''}" data-station-id="${escapeHtml(model.id)}" aria-label="${escapeHtml(description)}" aria-pressed="${model.selected}" title="${escapeHtml(description)}"><span class="ev-map-pin-count" aria-hidden="true">${escapeHtml(model.count)}</span><span class="ev-map-pin-label" aria-hidden="true" hidden>${escapeHtml(model.station.name || '이름 미제공 충전소')}</span></button>`;
+  return `<div class="ev-map-marker"><button type="button" class="ev-map-pin ev-map-pin--${model.tone}${model.selected ? ' is-selected' : ''}" data-station-id="${escapeHtml(model.id)}" aria-label="${escapeHtml(description)}" aria-pressed="${model.selected}" title="${escapeHtml(description)}"><span class="ev-map-pin-symbol" aria-hidden="true">⚡</span><span class="ev-map-pin-count" aria-hidden="true">${escapeHtml(model.count)}</span><span class="ev-map-pin-label" data-label-level="0" aria-hidden="true" hidden><span class="ev-map-label-title">${escapeHtml(model.station.name || '이름 미제공 충전소')}</span><span class="ev-map-label-context">${escapeHtml(model.label)}</span><span class="ev-map-label-detail">${escapeHtml(model.facts || '')}</span></span></button></div>`;
 }
 
 function mapError(code, message, recoverable = true) {
@@ -216,23 +247,32 @@ function installStyles() {
     .ev-map-tools{position:absolute;top:var(--ev-map-controls-top,84px);right:12px;z-index:800;display:grid;gap:1px;overflow:hidden;border:1px solid #d5dfdb;border-radius:12px;box-shadow:0 3px 14px #18342a16}
     .ev-map-tools button{display:grid;place-items:center;width:44px;height:44px;margin:0;padding:0;border:0;background:white;color:#193c30;font:500 24px/1 system-ui;cursor:pointer}
     .ev-map-tools button:hover{background:#f1f7f4}.ev-map-tools button:focus-visible,.ev-map-pin:focus-visible{outline:3px solid #1590df;outline-offset:3px}
-    .ev-leaflet-icon{background:transparent;border:0}.ev-map-pin{position:relative;display:flex;align-items:center;gap:5px;min-width:64px;height:40px;padding:4px 7px 4px 4px;overflow:visible;border:2px solid white;border-radius:22px;background:#718078;color:white;box-shadow:0 2px 5px #123a2840;cursor:pointer;font:700 12px/1.2 system-ui,sans-serif;white-space:nowrap}
+    .ev-leaflet-icon{background:transparent;border:0}.ev-map-marker{position:relative;width:64px;height:44px;pointer-events:none}
+    .ev-map-pin{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:4px;min-width:48px;height:32px;padding:4px 7px;overflow:visible;border:2px solid white;border-radius:16px;background:#718078;color:white;box-shadow:0 2px 5px #123a2840;cursor:pointer;font:700 12px/1.2 system-ui,sans-serif;white-space:nowrap;pointer-events:auto}
     .ev-map-pin:after{content:"";position:absolute;bottom:-6px;left:calc(50% - 5px);width:8px;height:8px;background:inherit;border-right:2px solid white;border-bottom:2px solid white;transform:rotate(45deg)}
     .ev-map-pin--available{background:#13a67c}.ev-map-pin--charging{background:#5982fc}.ev-map-pin--unavailable{background:#f15c5c}.ev-map-pin--unknown{background:#f4a22a}.ev-map-pin--restricted{background:#757e90}
-    .ev-map-pin-number{display:none}
+    .ev-map-pin-symbol{display:none;font-size:13px;line-height:1}
     .ev-map-pin-count{font-size:12px;letter-spacing:-.2px}.ev-map-pin.is-selected{outline:3px solid #164937;outline-offset:2px;box-shadow:0 0 0 7px #ffffffc9,0 5px 16px #163f3040}
-    .ev-map-pin-label{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);max-width:220px;padding:6px 9px;overflow:hidden;text-overflow:ellipsis;border:1px solid #dce7e1;border-radius:8px;background:#fffffff5;color:#1b3b2c;font:600 12px/1.35 system-ui,sans-serif;box-shadow:0 2px 8px #153e2814;pointer-events:none}
-    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected){width:15px;min-width:15px;height:15px;min-height:15px;padding:0;gap:0;border-width:2px;border-radius:50%}
+    .ev-map-pin-label{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);width:max-content;max-width:220px;padding:5px 8px;overflow:hidden;text-overflow:ellipsis;border:1px solid #dce7e1;border-radius:8px;background:#fffffff5;color:#1b3b2c;font:600 12px/1.35 system-ui,sans-serif;box-shadow:0 2px 8px #153e2814;pointer-events:none;text-align:left}
+    .ev-map-label-title{display:block;overflow:hidden;text-overflow:ellipsis}.ev-map-label-context,.ev-map-label-detail{display:none;white-space:normal;font-size:11px;line-height:1.5;font-weight:500}
+    .ev-map-pin-label[data-label-level="1"] .ev-map-label-context,.ev-map-pin-label[data-label-level="2"] .ev-map-label-context{display:block;margin-top:4px;color:#346255}
+    .ev-map-pin-label[data-label-level="2"] .ev-map-label-detail{display:block;margin-top:4px;padding-top:4px;border-top:1px solid #e3eae8;color:#53655f}
+    .ev-map-pin-label:not([data-label-level="0"]){max-width:220px;padding:7px 9px}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected){bottom:0;transform:translate(-50%,50%);width:12px;min-width:12px;height:12px;min-height:12px;padding:0;gap:0;border-radius:50%;box-shadow:none}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected)::after{display:none}
-    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-number,.ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){width:24px;min-width:24px;height:24px;min-height:24px;padding:0;gap:0;border-radius:50%}
-    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected){width:28px;min-width:28px;height:28px;min-height:28px;padding:0;gap:0;border-radius:50%}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}\n    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){width:26px;min-width:26px;height:26px;padding:0;border-radius:50%}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-symbol{display:block}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
+    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected){min-width:38px;height:30px}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin-label{max-width:116px;font-size:11px;padding:3px 5px}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin-label{max-width:140px}
+    .ev-map-host.ev-map-dense .ev-map-pin:not(.is-selected){box-shadow:none}
     .ev-map-pin.is-selected .ev-map-pin-label{max-width:240px;font-size:14px;font-weight:800;border:2px solid #087f64;background:#effcf6;color:#075842;padding:8px 11px}
     .ev-map-pin-label[hidden]{display:none}.ev-map-current{width:18px;height:18px;border:3px solid white;border-radius:50%;background:#287de0;box-shadow:0 0 0 7px #287de025,0 2px 5px #14366244}
     .ev-map-failure{position:absolute;inset:0;display:grid;place-content:center;gap:10px;padding:24px;text-align:center;color:#324c40;font:500 14px/1.6 system-ui;background:#f2f6f3}
     .ev-map-host .leaflet-control-attribution{max-width:100%;font-size:10px}.ev-map-host .leaflet-control-scale-line{font-size:10px}
-    @media(max-width:760px){.ev-map-host{--ev-map-controls-top:64px}}
+    @media(max-width:760px){.ev-map-host{--ev-map-controls-top:64px}.ev-map-pin-label:not([data-label-level="0"]){max-width:200px}}
     @media(prefers-reduced-motion:reduce){.ev-map-host *{scroll-behavior:auto!important}}
   `;
   document.head.append(style);
@@ -346,28 +386,30 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
     if (destroyed || !engine) return;
     const bounds = canvas.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
-    const occupied = obstacles();
-    const pins = [...canvas.querySelectorAll('.ev-map-pin')].sort((a, b) => Number(b.classList.contains('is-selected')) - Number(a.classList.contains('is-selected')));
-    let accepted = 0;
-    const limit = labelBudget(engine.getZoom(), bounds.width, bounds.height);
-    for (const pin of pins) {
-      const label = pin.querySelector('.ev-map-pin-label');
-      if (!label) continue;
-      const selected = pin.classList.contains('is-selected');
-      label.hidden = !selected && accepted >= limit;
-      if (label.hidden) continue;
-      label.style.visibility = 'hidden';
-      label.style.transform = 'translateX(-50%)';
-      const result = globalThis.CareMarkerPlacement.fit([label.getBoundingClientRect()], pin.getBoundingClientRect(), bounds, occupied, labelSides.get(pin.dataset.stationId));
-      label.hidden = !result;
-      if (result) {
-        label.style.transform = `translateX(-50%) translate(${result.dx}px, ${result.dy}px)`;
-        label.style.visibility = '';
-        occupied.push(result.rect);
-        labelSides.set(pin.dataset.stationId, result.side);
-        accepted += 1;
-      }
+    const zoom = engine.getZoom(), limit = labelBudget(zoom, bounds.width, bounds.height);
+    const intersects = rect => rect.width > 0 && rect.height > 0 && rect.right > bounds.left && rect.left < bounds.right && rect.bottom > bounds.top && rect.top < bounds.bottom;
+    const entries = [...canvas.querySelectorAll('.ev-map-pin')].map(pin => ({pin, label:pin.querySelector('.ev-map-pin-label'), id:pin.dataset.stationId, selected:pin.classList.contains('is-selected')}));
+    // Hide first, then measure in batches. Avoid one forced layout per marker.
+    for (const item of entries) if (item.label) {item.label.hidden = true;item.label.style.visibility = 'hidden';item.label.style.transform = 'translateX(-50%)';}
+    for (const item of entries) item.pinRect = item.pin.getBoundingClientRect();
+    const candidates = entries.filter(item => item.label && intersects(item.pinRect))
+      .sort((a, b) => compareMarkerLabels(a, b, labelSides)).slice(0, Math.max(24, limit * 4));
+    const controls = obstacles().filter(intersects), pins = entries.map(item => item.pinRect).filter(intersects);
+    for (const item of candidates) {item.rects = [];item.label.hidden = false;}
+    for (let level = 0; level <= markerDetailLevel(zoom); level++) {
+      for (const item of candidates) item.label.dataset.labelLevel = String(level);
+      for (const item of candidates) item.rects.push(item.label.getBoundingClientRect());
     }
+    const placements = planMarkerLabels(candidates.map(item => ({...item,pin:item.pinRect})), bounds, controls, pins, labelSides, limit);
+    for (const item of candidates) {
+      const result = placements.get(item.id);item.label.hidden = !result;
+      if (!result) continue;
+      item.label.dataset.labelLevel = String(result.level);
+      item.label.style.transform = `translateX(-50%) translate(${result.dx}px, ${result.dy}px)`;
+      item.label.style.visibility = '';
+      labelSides.set(item.id, result.side);
+    }
+    for (const id of labelSides.keys()) if (!placements.has(id)) labelSides.delete(id);
   }
 
   function queueLabels() {
@@ -376,6 +418,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
 
   function settled() {
     if (destroyed) return;
+    if (engine) host.dataset.markerScale = markerScale(engine.getZoom());
     queueLabels();
     clearTimeout(drawTimer);
     drawTimer = setTimeout(draw, 80);
@@ -410,6 +453,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
     const zoom = engine.getZoom();
     const view = selectMarkerModels(rows, engine.getBounds(), { selectedId: selection, summaries, limit: zoom < 11 ? 160 : zoom < 14 ? 380 : 800 });
     const models = view.models;
+    host.classList.toggle('ev-map-dense', view.visibleCount > 500);
     densityMessage = view.limited ? `지도 ${models.length.toLocaleString()}곳 표시 · 확대하면 더 자세히 볼 수 있습니다` : '';
     if (tileErrors < 3) note.textContent = providerNote();
     const wanted = new Set(models.map(model => model.id));
@@ -559,7 +603,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
       canvas.remove(); note.remove(); controls.remove();
       delete host.dataset.mapProvider;
       delete host.dataset.markerScale;
-      host.classList.remove('ev-map-host');
+      host.classList.remove('ev-map-host', 'ev-map-dense');
     }
   };
   if (typeof ResizeObserver === 'function') {
