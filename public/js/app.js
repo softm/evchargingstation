@@ -503,6 +503,7 @@ async function changeFilters(patch) {
     }
   }
   state.filters = { ...state.filters, ...patch };
+  if (Object.hasOwn(patch,'query') && String(patch.query).trim() && window.matchMedia?.('(max-width:760px)').matches) setMobileView('list');
   state.listLimit = 60;
   if (reload) await loadRegions();
   render();
@@ -852,6 +853,7 @@ if (window.matchMedia?.('(max-width:760px)').matches) setMobileView('map');
 await initialGeolocation();
 await initializeMap();
 await refresh();
+if (state.filters.query.trim() && window.matchMedia?.('(max-width:760px)').matches) setMobileView('list');
 function startPolling() {
   clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (document.hidden) return; if (!demo) refresh(); else { render(); const station = currentStation(); if (station && $('stationDialog').open) renderDetails(station); } }, 60000);
