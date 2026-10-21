@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createStatusService,parseStation,sourceTime} from '../services/status-api/lib/status-service.js';
+import {createHandler} from '../services/status-api/lib/http.js';
 const now = Date.parse('2026-10-21T10:00:00Z');
 const row = (id='01',extra={}) => ({statId:'NT100483',chgerId:id,zcode:'51',busiId:'NT',stat:'2',statUpdDt:'20200101090000',...extra});
 const json = rows => JSON.stringify({resultCode:'00',pageNo:1,totalCount:rows.length,items:{item:rows}});
@@ -9,6 +10,18 @@ const memoryCache = () => {
   const values = new Map(); return {get:async key=>values.get(key),set:async (key,value)=>values.set(key,value)};
 };
 const quiet = {error(){}};
+test('HTTP routing accepts Vercel rewrite metadata, rejects injected provider parameters and exposes safe unconfigured status',async()=>{
+  const api = createStatusService({cache:memoryCache(),registry,serviceKey:''});
+  const handler = createHandler(api,new Set(['https://softm.github.io']));
+  const request = path=>new Request('https://test.example'+path,{headers:{Origin:'https://softm.github.io'}});
+  for (const path of ['/api/status?stationId=NT100483&region=51','/api/status?stationId=NT100483&region=51&path=status']) {
+    const response = await handler(request(path)); assert.equal(response.status,503);
+    assert.equal((await response.json()).code,'UNCONFIGURED');
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'),'https://softm.github.io');
+  }
+  for (const path of ['/api/status?stationId=NT100483&region=51&serviceKey=anything','/api/status?stationId=NT100483&stationId=OTHER','/api/status?stationId=NT100483&region=51&path=other']) assert.equal((await handler(request(path))).status,400);
+  assert.equal((await handler(new Request('https://test.example/api/health',{headers:{Origin:'https://other.example'}}))).status,403);
+});
 test('full station JSON/XML preserve zero-prefixed identifiers and separate observation from state-change time',()=>{
   const stamp = new Date(now).toISOString();
   const data = parseStation(json([row(),row('02',{stat:'3'})]),'NT100483','51',stamp,'NT');

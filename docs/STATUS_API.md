@@ -3,6 +3,7 @@
 GitHub Pages의 gzip 시설·전국 검색 자료는 그대로 사용한다. 별도 Vercel Functions 서버가 상세 화면에서 선택한 충전소만 한국환경공단 `getChargerInfo`로 조회한다. 변경분 API의 빈 응답을 충전소 전체 정상 확인으로 해석하지 않는다.
 
 - 프로젝트: `evchargingstation-status`, 루트: `services/status-api`, Node 24, 서울 `icn1`.
+- 운영 API: `https://evchargingstation-status.vercel.app/api`. 최초 배포는 GitHub 연동 미설치로 Git 저장소의 검증된 소스를 직접 배포했다. Vercel Git 자동 배포는 아직 연결되지 않았다. 이후 Git 연결 시 저장소 `softm/evchargingstation`과 루트 `services/status-api`를 지정한다.
 - `GET /api/status?stationId=NT100483&region=51`: 전체 응답 건수·충전소·지역·운영사·충전기 ID 중복 검증 후 상태와 원본 확인 시각만 반환한다. 사이트에 게시된 충전소 등록부에 없는 ID는 API를 호출하지 않는다.
 - `GET /api/health`: 인증 설정 유무, 캐시 상태, 최근 실제 조회 결과, 확인 시각을 제공한다. 키와 원본 오류 내용은 반환하지 않는다. `ready`는 최근 충전기 상태 확인 성공을 뜻하지 않는다.
 - API 인증키는 Vercel 프로젝트의 **Production 환경변수 `DATA_GO_KR_SERVICE_KEY`**에 등록하고 재배포한다. GitHub Actions Secret은 자동으로 Vercel에 전달되지 않는다. 키를 소스·공개 설정·채팅에 붙여 넣지 않는다.
