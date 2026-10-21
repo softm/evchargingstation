@@ -38,7 +38,7 @@ export function mergeLiveStatus(station, data, region) {
 }
 
 export class LiveStatusClient {
-  constructor(config = {}, {fetcher = fetch, now = Date.now} = {}) {
+  constructor(config = {}, {fetcher = (input,init) => fetch(input,init), now = Date.now} = {}) {
     this.base = config.statusApiBaseUrl ? new URL(`${config.statusApiBaseUrl.replace(/\/$/,'')}/`,location.href) : null;
     if (this.base && !['https:','http:'].includes(this.base.protocol)) throw new Error('Invalid status server URL');
     this.fetcher = fetcher; this.now = now; this.entries = new Map(); this.pending = new Map();

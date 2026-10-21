@@ -12,6 +12,14 @@ const station = {id:'NT100483',regionCode:'51',name:'테스트 전용',chargers:
 const result = () => ({schemaVersion:1,kind:'station-status',stationId:station.id,regionCode:'51',observedAt:stamp,complete:true,
   chargers:[{id:'01',status:'3',observedAt:stamp,statusChangedAt:'2020-01-01T00:00:00Z'},{id:'02',status:'2',observedAt:stamp}]});
 
+test('default browser fetch is invoked without binding the client as its native receiver',async t=>{
+  globalThis.location={href:'https://softm.github.io/evchargingstation/'};
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});
+  globalThis.fetch=function() { assert.equal(this,undefined);return Promise.resolve(Response.json(result())); };
+  const client=new LiveStatusClient({statusApiBaseUrl:'https://test.example/api'},{now:()=>now});
+  const entry=await client.refresh(station);assert.equal(entry.error,'');assert.equal(entry.data.observedAt,stamp);
+});
+
 test('live overlay updates only matched chargers, preserves inventory and leaves missing records unconfirmed',()=>{
   const updated = mergeLiveStatus(station,validateLiveStatus(result(),station,now),{statusCoverageAt:old});
   assert.deepEqual(stationStatusCounts(updated,{},now),{available:1,charging:1,unavailable:0,unknown:1,total:3});
