@@ -16,7 +16,7 @@ try {
   const name=`${viewport.width}x${viewport.height}`;
   try {
    await page.goto(`${base}?region=11&sort=name&ad-preview=1`,{waitUntil:'domcontentloaded'});
-   await page.locator('.station-card').first().waitFor({timeout:90000});
+   await page.locator('.station-card').first().waitFor({state:'attached',timeout:90000});
    await page.locator('#welcomeAdDialog[open]').waitFor();
    await page.screenshot({path:resolve(out,`welcome-${name}.png`)});
    await page.keyboard.press('Escape');await page.locator('#welcomeAdDialog').waitFor({state:'hidden'});
@@ -47,17 +47,28 @@ try {
    await page.getByRole('button',{name:'충전소 상세 닫기',exact:true}).click();
    if(viewport.width<761)await page.getByRole('button',{name:'목록',exact:true}).click();
    await page.getByRole('button',{name:'광고 펼치기',exact:true}).click();await page.getByRole('button',{name:'광고 접기',exact:true}).click();
-   await page.reload({waitUntil:'domcontentloaded'});await page.locator('.station-card').first().waitFor({timeout:90000});
+   await page.reload({waitUntil:'domcontentloaded'});await page.locator('.station-card').first().waitFor({state:'attached',timeout:90000});
    assert.equal(await page.locator('#welcomeAdDialog').isVisible(),false,'welcome is once per preview session');
    assert.equal(await page.locator('#bottomAdPanel').isVisible(),false,'explicit collapse survives reload');
    const search=page.getByRole('searchbox');await search.fill('__no_matching_charging_station__');
    await page.waitForFunction(()=>document.querySelector('#resultCount')?.textContent==='0');
    assert.equal(await page.locator('.adfit-banner[data-after-station]:visible').count(),0);
    // New non-preview session: no unit configured means no SDK/script/ins or ad space.
-   await page.goto(`${base}?region=11&sort=name`,{waitUntil:'domcontentloaded'});await page.locator('.station-card').first().waitFor({timeout:90000});
+   await page.goto(`${base}?region=11&sort=name`,{waitUntil:'domcontentloaded'});await page.locator('.station-card').first().waitFor({state:'attached',timeout:90000});
    assert.equal(await page.locator('ins.kakao_ad_area').count(),0);assert.equal(await page.locator('#bottomAd').isVisible(),false);
+   if(viewport.width<761)await page.getByRole('button',{name:'목록',exact:true}).click();
+   await page.getByRole('button',{name:/충전소 더 보기/}).click();
+   await page.waitForFunction(()=>document.querySelectorAll('.station-card').length===120);
+   assert.equal(await page.locator('.adfit-banner[data-after-station]').count(),3,'more results keep the same three placements');
+   if(viewport.width<761)await page.getByRole('button',{name:'지도',exact:true}).click();
+   await page.getByRole('button',{name:'지도 확대',exact:true}).click();
+   await page.getByRole('button',{name:'지도 축소',exact:true}).click();
+   const mapBox=await page.locator('#map').boundingBox();
+   await page.mouse.move(mapBox.x+mapBox.width*0.6,mapBox.y+mapBox.height*0.6);await page.mouse.down();
+   await page.mouse.move(mapBox.x+mapBox.width*0.6+40,mapBox.y+mapBox.height*0.6+25,{steps:8});await page.mouse.up();
+   await page.waitForFunction(()=>document.querySelector('#regionSelect').value==='auto');
    assert.equal(adRequests.length,0);assert.deepEqual(errors,[]);
-   results.push({viewport,pass:true,adRequests:0,checks:['6/18/30 slots','bottom reserve/collapse/session','welcome Escape/session','scroll selection and marker','marker click and detail','mobile map/list','empty results','unconfigured zero SDK']});
+   results.push({viewport,pass:true,adRequests:0,checks:['6/18/30 slots','bottom reserve/collapse/session','welcome Escape/session','scroll selection and marker','marker click and detail','mobile map/list','empty results','more results','map zoom and drag','unconfigured zero SDK']});
   } catch(error){await page.screenshot({path:resolve(out,`failure-${name}.png`)}).catch(()=>{});throw error;}
   finally{await context.close();}
  }

@@ -131,3 +131,10 @@ test('build variables retain the legacy alias, enforce distinct issued units and
  assert.throws(()=>buildAdConfig({}, {PUBLIC_ADFIT_ENABLED:'yes'}));
  const approved=buildAdConfig({placements:{welcome:{adfitApproved:true}}},{PUBLIC_ADFIT_WELCOME_UNIT:ids[0]});assert.equal(approved.enabled,false);
 });
+
+test('teardown cancels pending work, removes callback ownership and cannot re-request from stale observers',()=>{
+ const f=adFixture(),m=manager(f),s=banner(f,m);s.update({eligible:true});f.visibleAll();
+ const callback=f.created.find(n=>n.tag==='ins').attrs['data-ad-onfail'];assert.equal(typeof f.win[callback],'function');
+ m.destroy();assert.equal(f.win[callback],undefined);assert.equal(f.timers.size,0);assert.equal(f.host.hidden,true);
+ s.update({eligible:true});f.visibleAll();assert.equal(f.networkScripts().length,1);
+});

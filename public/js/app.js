@@ -930,5 +930,5 @@ function startPolling() {
 }
 startPolling();
 welcomeAd.start();
-window.addEventListener('pagehide', () => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); cancelAnimationFrame(selectedListFrame); listScrollSelection?.destroy(); });
+window.addEventListener('pagehide', event => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); cancelAnimationFrame(selectedListFrame); if(event.persisted)listScrollSelection?.suppress();else {listScrollSelection?.destroy();bottomAd.destroy();adManager.destroy();} });
 window.addEventListener('pageshow', event => { if (event.persisted) { startPolling(); if (!demo) refresh(); } });
