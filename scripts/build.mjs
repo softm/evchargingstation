@@ -16,13 +16,13 @@ await versionAssets(output, process.env.GITHUB_SHA || 'local');
 const context = { window: {} };
 vm.runInNewContext(await readFile(path.join(root, 'public/config.js'), 'utf8'), context);
 const config = { ...context.window.EV_CONFIG };
-const variables = { PUBLIC_NAVER_MAP_CLIENT_ID: 'naverMapClientId', PUBLIC_EV_API_BASE_URL: 'apiBaseUrl', PUBLIC_EV_DATA_BASE_URL: 'dataBaseUrl' };
+const variables = { PUBLIC_NAVER_MAP_CLIENT_ID: 'naverMapClientId', PUBLIC_EV_API_BASE_URL: 'apiBaseUrl', PUBLIC_EV_DATA_BASE_URL: 'dataBaseUrl', PUBLIC_EV_STATUS_API_BASE_URL:'statusApiBaseUrl' };
 for (const [key, field] of Object.entries(variables)) {
   // Blank Actions variables must preserve source defaults. Use DISABLE_NAVER_MAP=true to disable explicitly.
   if (process.env[key]) config[field] = process.env[key];
 }
 if (process.env.DISABLE_NAVER_MAP === 'true') config.naverMapClientId = '';
-for (const key of ['apiBaseUrl', 'dataBaseUrl']) {
+for (const key of ['apiBaseUrl', 'dataBaseUrl','statusApiBaseUrl']) {
   const value = config[key] || '';
   if (/^(?:javascript|data):/i.test(value) || /[\r\n]/.test(value)) throw new Error(`Invalid public URL setting: ${key}`);
   if (/servicekey|apikey|token=/i.test(value)) throw new Error(`Secret-like parameter in public URL setting: ${key}`);

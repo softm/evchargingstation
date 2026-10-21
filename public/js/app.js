@@ -1,7 +1,8 @@
 import { createMap, parseSharedView } from './map.js';
-import { revealSelectedCard } from './selection.js';
+import { revealSelectedCard, bindListScrollSelection } from './selection.js';
 import { BANNER_AFTER, mountAdBanner } from './ads.js';
 import { DataClient, selectViewportRegions } from './data.js';
+import { LiveStatusClient } from './live-status.js';
 import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpen24, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl } from './domain.js';
 import { compareStations, nearbyAlternatives, estimateChargingCost } from './discovery.js';
 import { facilityName, facilityDetailName } from './fees.js';
@@ -15,6 +16,7 @@ const sharedView = parseSharedView(params);
 const config = window.EV_CONFIG || {};
 const client = new DataClient(config);
 const demo = params.get('demo') === '1';
+const liveStatus = new LiveStatusClient(demo ? {} : config);
 const banner = mountAdBanner({ host: $('adfitBanner'), root: $('listContent'), config: window.EV_AD_CONFIG,
   preview: params.get('ad-preview') === '1', demo, win: window, doc: document, location });
 const favoriteKey = demo ? 'evchargingstation:demo-favorites:v1' : 'evchargingstation:favorites:v1';
@@ -30,6 +32,8 @@ let refreshTimer;
 let demoRegion;
 let mapSearchPending = false;
 let selectedListFrame = 0;
+let selectionOrigin = 'list';
+let listScrollSelection;
 
 function cancelSelectedListReveal() {
   cancelAnimationFrame(selectedListFrame);
@@ -37,10 +41,11 @@ function cancelSelectedListReveal() {
 }
 
 function queueSelectedListReveal(id) {
+  if (selectionOrigin === 'scroll') return;
   cancelAnimationFrame(selectedListFrame);
   selectedListFrame = requestAnimationFrame(() => {
     selectedListFrame = 0;
-    if (state.selectedId === String(id)) revealSelectedCard($('listContent'), id);
+    if (state.selectedId === String(id)) { listScrollSelection?.suppress(); revealSelectedCard($('listContent'), id); }
   });
 }
 const costDrafts = new Map();
@@ -210,12 +215,28 @@ function relativeTime(value) {
 }
 
 const threshold = () => Number(state.manifest?.freshnessThresholdSeconds || config.freshnessThresholdSeconds) || 600;
-const stationRegion = station => state.detail?.station === station ? state.detail.region : state.regions.get(String(station.regionCode));
-const allStations = () => state.region === 'all' ? state.national?.stations || [] : state.activeCodes.flatMap(code => state.regions.get(code)?.stations || []);
+const stationRegion = station => state.detail?.station.id === station.id ? state.detail.region : state.regions.get(String(station.regionCode));
+const allStations = () => {
+  const stations = state.region === 'all' ? state.national?.stations || [] : state.activeCodes.flatMap(code => state.regions.get(code)?.stations || []);
+  return liveStatus.entries.size ? stations.map(station=>liveStatus.apply(station,stationRegion(station))) : stations;
+};
 const currentStation = () => {
   const candidate = allStations().find(station => String(station.id) === state.selectedId);
-  return candidate?.summaryOnly && state.detail?.station.id === state.selectedId ? state.detail.station : candidate;
+  return candidate?.summaryOnly && state.detail?.station.id === state.selectedId ? liveStatus.apply(state.detail.station,state.detail.region) : candidate;
 };
+
+async function refreshSelectedStatus() {
+  const station = currentStation();
+  if (!liveStatus.enabled || !station || station.summaryOnly || !$('stationDialog').open || document.hidden) return;
+  const task = liveStatus.refresh(station);
+  renderDetails(currentStation());
+  await task;
+  // A late reply may update its cache, but must not reopen a closed/new panel.
+  if (state.selectedId !== station.id || !$('stationDialog').open) return;
+  render();
+  const current = currentStation();
+  if (current && !current.summaryOnly) renderDetails(current);
+}
 
 function updateControls() {
   $('availableToggle').setAttribute('aria-pressed', String(state.filters.available));
@@ -315,6 +336,7 @@ function render() {
   const shown = state.visible.slice(0, state.listLimit);
   const list = $('listContent');
   const previousListScroll = list.scrollTop;
+  listScrollSelection?.suppress();
   // Keep the ad node and its iframe connected while result cards change.
   $('listBeforeAd').innerHTML = shown.length ? shown.slice(0, BANNER_AFTER).map(stationCard).join('') : emptyHTML();
   $('listAfterAd').innerHTML = shown.slice(BANNER_AFTER).map(stationCard).join('')
@@ -448,7 +470,7 @@ async function loadNationwide() {
     const id = state.sharedId || ($('stationDialog').open ? state.selectedId : null);
     if (id) {
       state.sharedId = null;
-      if (data.stations.some(station => station.id === id)) await selectStation(id,{preserveView:Boolean(sharedView) || id === state.selectedId});
+      if (data.stations.some(station => station.id === id)) await selectStation(id,{preserveView:Boolean(sharedView) || id === state.selectedId,origin:selectionOrigin});
       else { if ($('stationDialog').open) closeDetails(); toast('갱신된 전국 자료에서 이 충전소를 찾지 못했습니다.'); }
     }
   } catch (error) {
@@ -480,6 +502,7 @@ async function refresh() {
     // known, preserving shared map positions and later pans or refreshes.
     if (initialRegionPending) { initialRegionPending = false; showRegionOnMap(); }
     await loadRegions(true);
+    void refreshSelectedStatus();
   } catch (error) { state.error = error.message || '네트워크 연결을 확인해 주세요.'; state.loading = false; render(); }
 }
 
@@ -545,6 +568,8 @@ function favorite(id) {
 async function selectStation(id, { preserveView = false, origin = 'list' } = {}) {
   let station = allStations().find(item => item.id === id);
   if (!station) return;
+  selectionOrigin = origin;
+  if (origin !== 'scroll') listScrollSelection?.suppress();
   const revision = ++state.detailEpoch;
   if (station.summaryOnly) {
     const epoch = state.loadEpoch;
@@ -579,11 +604,12 @@ async function selectStation(id, { preserveView = false, origin = 'list' } = {})
   const index = state.visible.findIndex(item => String(item.id) === String(id));
   if (origin === 'map' && index >= state.listLimit) state.listLimit = Math.ceil((index + 1) / 60) * 60;
   render();
-  if (hasCoordinates(station) && !preserveView) map?.focus(station, { zoom: Math.max(16, map?.getZoom?.() || 16) });
+  if (hasCoordinates(station) && !preserveView) map?.focus(station, { zoom: origin === 'scroll' ? map?.getZoom?.() || 14 : Math.max(16, map?.getZoom?.() || 16) });
   renderDetails(station);
   // Nonmodal panel preserves an interactive, unblurred map and list.
   if (!$('stationDialog').open) $('stationDialog').show();
   queueSelectedListReveal(id);
+  void refreshSelectedStatus();
 }
 
 function closeDetails() {
@@ -596,6 +622,31 @@ function closeDetails() {
   preserveSelectedView = false;
   map?.setStations(state.visible, { selectedId: null, summaries: state.summaries });
   document.querySelector('.station-card.selected')?.classList.remove('selected');
+}
+
+function selectScrolledStation(id) {
+  if (document.hidden || state.loading || state.selectedId === id) return;
+  const station = state.visible.find(item=>String(item.id) === id);
+  if (!station) return;
+  cancelSelectedListReveal();
+  selectionOrigin = 'scroll';
+  if ($('stationDialog').open) {
+    // Preserve the user's list position; an already-open detail follows selection.
+    void selectStation(id,{origin:'scroll'});
+    return;
+  }
+  state.detailEpoch++;
+  state.detail = null;
+  state.selectedId = id;
+  state.navigationRevision++;
+  cancelMapSearch();
+  for (const card of $('listContent').querySelectorAll('.station-card')) {
+    const selected = card.dataset.stationId === id;
+    card.classList.toggle('selected',selected);
+    card.setAttribute('aria-current',String(selected));
+  }
+  map?.setStations(state.visible,{selectedId:id,summaries:state.summaries});
+  if (hasCoordinates(station)) map?.focus(station,{zoom:map?.getZoom?.() || 14});
 }
 
 function renderDetails(station) {
@@ -623,7 +674,8 @@ function renderDetails(station) {
   const naver = !demo ? `https://map.naver.com/p/search/${encodeURIComponent(station.address || station.name)}` : '';
   const kakao = nav ? `https://map.kakao.com/link/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}` : '';
   const now = Date.now();
-  const options = {now, threshold:threshold(), demo, formatTime, filters:state.filters};
+  const options = {now, threshold:threshold(), demo, formatTime, filters:state.filters,
+    liveStatus:liveStatus.enabled ? liveStatus.state(station.id) : null};
   content.innerHTML = `
     <div class="detail-toolbar"><h2 id="detailTitle">${esc(station.name)}</h2><button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button></div>
     <div class="detail-top"><p class="detail-eyebrow">${demo ? '화면 체험 · 가상 충전소' : esc(station.operatorName || '운영사 미확인')}</p>
@@ -733,6 +785,7 @@ async function initializeMap() {
 }
 
 function bindEvents() {
+  listScrollSelection = bindListScrollSelection($('listContent'),selectScrolledStation,{onIntent:()=>{selectionOrigin='scroll';cancelSelectedListReveal();}});
   $('searchForm').addEventListener('submit', event => { event.preventDefault(); clearTimeout(inputTimer); changeFilters({ query: $('searchInput').value }); });
   $('searchInput').addEventListener('input', event => { const query = event.target.value; state.filters.query = query; clearTimeout(inputTimer); inputTimer = setTimeout(() => changeFilters({ query }), 200); });
   $('clearSearch').addEventListener('click', () => { clearTimeout(inputTimer); changeFilters({ query: '' }); $('searchInput').focus(); });
@@ -790,7 +843,7 @@ function bindEvents() {
     const button = event.target.closest('[data-action]'); if (!button) return;
     if (button.dataset.action === 'close') { closeDetails(); return; }
     if (button.dataset.action === 'retry-detail') { await selectStation(state.selectedId); return; }
-    if (button.dataset.action === 'refresh-status') { await refresh(); return; }
+    if (button.dataset.action === 'refresh-status') { if (liveStatus.enabled) await refreshSelectedStatus(); else await refresh(); return; }
     if (button.dataset.action === 'nearby') {
       clearTimeout(inputTimer);
       state.filters = {...state.filters,query:'',favorites:false};
@@ -841,7 +894,7 @@ function bindEvents() {
       if (revision === state.navigationRevision) toast(error.message);
     } finally { $('locateButton').disabled = false; updateMapSearchButton(); }
   });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && !demo) refresh(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !demo) { void refreshSelectedStatus(); refresh(); } });
   window.addEventListener('storage', event => { if (event.key === favoriteKey) { state.favorites = readFavorites(); render(); } });
 }
 
@@ -856,8 +909,8 @@ await refresh();
 if (state.filters.query.trim() && window.matchMedia?.('(max-width:760px)').matches) setMobileView('list');
 function startPolling() {
   clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => { if (document.hidden) return; if (!demo) refresh(); else { render(); const station = currentStation(); if (station && $('stationDialog').open) renderDetails(station); } }, 60000);
+  refreshTimer = setInterval(() => { if (document.hidden) return; if (!demo) { void refreshSelectedStatus(); refresh(); } else { render(); const station = currentStation(); if (station && $('stationDialog').open) renderDetails(station); } }, 60000);
 }
 startPolling();
-window.addEventListener('pagehide', () => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); cancelAnimationFrame(selectedListFrame); });
+window.addEventListener('pagehide', () => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); cancelAnimationFrame(selectedListFrame); listScrollSelection?.destroy(); });
 window.addEventListener('pageshow', event => { if (event.persisted) { startPolling(); if (!demo) refresh(); } });

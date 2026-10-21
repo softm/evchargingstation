@@ -1,9 +1,11 @@
 import { DataClient } from './data.js';
 import { summarizeCollection, verifyRegionCounts } from './data-status-model.js';
+import { LiveStatusClient } from './live-status.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
 const client = new DataClient(window.EV_CONFIG || {});
+const statusClient = new LiveStatusClient(window.EV_CONFIG || {});
 const number = value => value === null || value === undefined ? '미확인' : Number(value).toLocaleString('ko-KR');
 const bytes = value => value === null || value === undefined ? '미확인' : value < 1000 ? `${value} B` : value < 1e6 ? `${(value / 1000).toFixed(1)} KB` : `${(value / 1e6).toFixed(2)} MB`;
 const time = value => !value || !Number.isFinite(Date.parse(value)) ? '미확인' : new Intl.DateTimeFormat('ko-KR', {timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(value));
@@ -16,7 +18,7 @@ async function buildInfo() {
   } catch { return {}; }
 }
 
-function render(manifest, build, fees, attempt) {
+function render(manifest, build, fees, attempt, health) {
   const result = summarizeCollection(manifest);
   const warnings = (manifest.warnings || []).map(warning => `수집 알림: ${warning.code || 'UNKNOWN'}`);
   const attemptLabel = attempt?.status === 'error' ? `실패 · ${attempt.code === 'NETWORK_ERROR' ? '수집 API 통신 오류' : '원본 수집 오류'}` : attempt?.status === 'success' ? '성공' : '기록 미등록';
@@ -36,6 +38,10 @@ function render(manifest, build, fees, attempt) {
     ['예약 자동 수집', schedule],
     ['최근 원본 수집 시도', `${time(attempt?.attemptedAt)} · ${attemptLabel}`],
     ['화면 자동 확인', '1분마다 게시된 자료 확인 · 원본 수집 실행과 별개'],
+    ['충전소 직접 상태 조회 서버', health?.ready ? '연결 · 선택한 충전소 직접 조회 가능' : health?.code === 'UNCONFIGURED' ? '서버 배포됨 · API 인증키 연결 필요' : health?.code === 'URL_UNCONFIGURED' ? '서버 주소 미등록' : health?.code === 'DAILY_LIMIT' ? 'API 일일 조회 한도 초과' : '직접 조회 불가 · 기존 게시 자료 유지'],
+    ['직접 조회 방식', '상세 화면에서 1분마다 확인 · 같은 충전소 원본 응답은 최대 2분간 공유'],
+    ['직접 조회 최근 시도', health?.lastAttempt ? `${time(health.lastAttempt.attemptedAt)} · ${health.lastAttempt.status === 'success' ? `성공 · ${health.lastAttempt.chargerCount}기` : `실패 · ${health.lastAttempt.code || 'UNKNOWN'}`}` : '조회 기록 없음 · 서버 연결만으로 상태 확인 성공을 뜻하지 않음'],
+    ['직접 조회 마지막 성공', time(health?.lastSuccess?.observedAt)],
     ['전국 검색 자료', manifest.searchIndex ? `${number(manifest.searchIndex.stationCount)}곳 · ${number(manifest.searchIndex.chargerCount)}기 · JSON.gz ${bytes(manifest.searchIndex.publishedBytes)}` : '아직 게시되지 않음'],
     ['사이트 배포', time(build.builtAt)],
     ['시간 기준', '한국 시간 (Asia/Seoul)'],
@@ -57,9 +63,9 @@ async function refresh() {
   $('regionRows').querySelectorAll('button').forEach(button => {button.disabled = true;});
   $('loadStatus').textContent = '게시된 수집 결과를 다시 확인하고 있습니다.';
   try {
-    const [manifest, build, fees, attempt] = await Promise.all([client.manifest(), buildInfo(), client.fees().catch(() => null), client.collectionAttempt().catch(() => null)]);
+    const [manifest, build, fees, attempt, health] = await Promise.all([client.manifest(), buildInfo(), client.fees().catch(() => null), client.collectionAttempt().catch(() => null), statusClient.health().catch(()=>({code:'UNREACHABLE'}))]);
     currentManifest = manifest;
-    render(manifest, build, fees, attempt);
+    render(manifest, build, fees, attempt, health);
   } catch {
     $('loadStatus').className = 'notice error';
     $('loadStatus').textContent = currentManifest ? '최신 결과를 읽지 못했습니다. 아래에는 이전에 읽은 결과를 유지합니다. 현황 새로고침을 다시 눌러 주세요.' : '수집 결과를 읽지 못했습니다. 연결 상태를 확인하고 현황 새로고침을 눌러 주세요.';

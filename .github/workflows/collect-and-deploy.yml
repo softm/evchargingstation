@@ -141,6 +141,9 @@ jobs:
             echo 'publish=false' >> "$GITHUB_OUTPUT"
             echo 'No new verified information; existing deployment preserved.' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Install status API dependencies for contract checks
+        if: github.event_name != 'schedule' && steps.publish_decision.outputs.publish == 'true'
+        run: npm ci --prefix services/status-api --ignore-scripts
       - name: Check app contracts
         if: steps.publish_decision.outputs.publish == 'true'
         run: npm run check
@@ -153,6 +156,7 @@ jobs:
           PUBLIC_NAVER_MAP_CLIENT_ID: ${{ vars.PUBLIC_NAVER_MAP_CLIENT_ID }}
           PUBLIC_EV_API_BASE_URL: ${{ vars.PUBLIC_EV_API_BASE_URL }}
           PUBLIC_EV_DATA_BASE_URL: ${{ vars.PUBLIC_EV_DATA_BASE_URL }}
+          PUBLIC_EV_STATUS_API_BASE_URL: ${{ vars.PUBLIC_EV_STATUS_API_BASE_URL }}
           PUBLIC_ADFIT_BANNER_UNIT: ${{ vars.PUBLIC_ADFIT_BANNER_UNIT }}
           SCHEDULED_COLLECTION_ENABLED: ${{ vars.PAUSE_EV_COLLECTION != 'true' }}
         run: npm run build

@@ -3,5 +3,6 @@ window.EV_CONFIG = Object.freeze({
   naverMapClientId: 'etfcybk8vf',
   apiBaseUrl: '',
   dataBaseUrl: './data',
+  statusApiBaseUrl: 'https://evchargingstation-status.vercel.app/api',
   freshnessThresholdSeconds: 600
 });
