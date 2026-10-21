@@ -46,7 +46,11 @@ try {
    if(viewport.width<761)assert.equal(await page.locator('#bottomAd').isVisible(),false,'mobile detail owns its space');
    await page.getByRole('button',{name:'충전소 상세 닫기',exact:true}).click();
    if(viewport.width<761)await page.getByRole('button',{name:'목록',exact:true}).click();
-   await page.getByRole('button',{name:'광고 펼치기',exact:true}).click();await page.getByRole('button',{name:'광고 접기',exact:true}).click();
+   // Mobile map navigation ends the temporary reading collapse and restores the
+   // user's expanded choice. Desktop stays in the list and remains collapsed.
+   assert.equal(await page.locator('#bottomAdPanel').isVisible(),viewport.width<761,'navigation preserves the explicit bottom-ad choice');
+   if(viewport.width>=761)await page.getByRole('button',{name:'광고 펼치기',exact:true}).click();
+   await page.getByRole('button',{name:'광고 접기',exact:true}).click();
    await page.reload({waitUntil:'domcontentloaded'});await page.locator('.station-card').first().waitFor({state:'attached',timeout:90000});
    assert.equal(await page.locator('#welcomeAdDialog').isVisible(),false,'welcome is once per preview session');
    assert.equal(await page.locator('#bottomAdPanel').isVisible(),false,'explicit collapse survives reload');
