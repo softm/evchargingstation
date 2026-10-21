@@ -3,6 +3,8 @@ import { gunzipSync } from 'node:zlib';
 import { summarizeCollection } from '../public/js/data-status-model.js';
 import { validAdUnit } from '../public/js/ads.js';
 import { unpackSearchIndex } from '../public/js/national-search.js';
+import vm from 'node:vm';
+import {buildAdConfig} from './ad-config.mjs';
 
 const rawUrl = process.env.DEPLOYMENT_URL || process.argv[2];
 if (!rawUrl) throw new Error('Set DEPLOYMENT_URL or provide the published app URL.');
@@ -42,10 +44,14 @@ async function verify() {
       || !app.includes('chargingHelpHTML') || !statusPage.includes('id="tariffSummary"')) {
     throw new Error('Published charging detail guidance or tariff coverage assets are missing.');
   }
-  const adUnit = adConfig.match(/"unit"\s*:\s*"([^"]*)"/)?.[1];
+  const adContext={window:{}};vm.runInNewContext(adConfig,adContext);
+  const publishedAds=buildAdConfig(adContext.window.EV_AD_CONFIG,{});
+  const adUnit=publishedAds.units.list1.unit;
+  const [adList,adBottom,adWelcome]=await Promise.all([get('js/ad-list.js'),get('js/ad-bottom.js'),get('js/ad-welcome.js')]);
   if (!html.includes('id="adfitBanner"') || !html.includes('./ad-config.js') || !html.includes('./css/ads.css')
       || !ads.includes('mountAdBanner') || !adCss.includes('.adfit-banner')
-      || !app.includes("$('listBeforeAd').innerHTML") || !privacy.includes('카카오 AdFit')
+      || !app.includes('listAds.render(') || !adList.includes('mountListAds') || !adBottom.includes('mountBottomAd') || !adWelcome.includes('mountWelcome')
+      || !html.includes('id="bottomAd"') || !html.includes('id="welcomeAdDialog"') || !privacy.includes('카카오 AdFit')
       || typeof adUnit !== 'string' || (adUnit && !validAdUnit(adUnit))) throw new Error('Published AdFit integration assets/configuration are missing or invalid.');
   if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Published data manifest is invalid.');
   if (!html.includes('./data-status.html') || !statusPage.includes('id="dataSummary"')
@@ -96,7 +102,7 @@ async function verify() {
     stations: manifest.totalStations, chargers: manifest.totalChargers,
     tariffs: fees.operators.length, feeMode: fees.mode,
     completeness: manifest.dataCompleteness || null,
-    regionStorage: manifest.regionStorage || null, adFitConfigured: Boolean(adUnit), verifiedAt: new Date().toISOString() }));
+    regionStorage: manifest.regionStorage || null, adFitConfigured:publishedAds.enabled&&Object.values(publishedAds.units).some(slot=>validAdUnit(slot.unit)),adFitConfiguredPlacements:Object.entries(publishedAds.units).filter(([,slot])=>slot.unit).map(([name])=>name),welcomeAdRequestsEnabled:false, verifiedAt: new Date().toISOString() }));
 }
 
 for (let attempt = 1; attempt <= attempts; attempt++) {

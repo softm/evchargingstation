@@ -1,6 +1,9 @@
 import { createMap, parseSharedView } from './map.js';
 import { revealSelectedCard, bindListScrollSelection } from './selection.js';
-import { BANNER_AFTER, mountAdBanner } from './ads.js';
+import { createAdManager } from './ads.js';
+import { mountListAds } from './ad-list.js';
+import { mountBottomAd } from './ad-bottom.js';
+import { mountWelcome } from './ad-welcome.js';
 import { DataClient, selectViewportRegions } from './data.js';
 import { LiveStatusClient } from './live-status.js';
 import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpen24, summarizeStation, filterStations, typeInfo, distanceKm, hasCoordinates, insideMapBounds, safePhone, sourceUrl } from './domain.js';
@@ -17,8 +20,16 @@ const config = window.EV_CONFIG || {};
 const client = new DataClient(config);
 const demo = params.get('demo') === '1';
 const liveStatus = new LiveStatusClient(demo ? {} : config);
-const banner = mountAdBanner({ host: $('adfitBanner'), root: $('listContent'), config: window.EV_AD_CONFIG,
+const adManager = createAdManager({ config: window.EV_AD_CONFIG,
   preview: params.get('ad-preview') === '1', demo, win: window, doc: document, location });
+const listAds = mountListAds({root:$('listContent'),manager:adManager});
+const bottomAd = mountBottomAd({host:$('bottomAd'),manager:adManager,onSpaceChange:()=>requestAnimationFrame(()=>map?.resize())});
+const welcomeAd = mountWelcome({dialog:$('welcomeAdDialog'),manager:adManager,onChange:syncAds});
+function syncAds() {
+  adManager.setBlocked($('welcomeAdDialog').open || $('filterDialog').open || $('stationDialog').open);
+  bottomAd.setContext({isList:!window.matchMedia('(max-width:760px)').matches || !$('appLayout').classList.contains('mobile-map'),detailOpen:$('stationDialog').open || $('filterDialog').open || $('welcomeAdDialog').open});
+  listAds.sync();
+}
 const favoriteKey = demo ? 'evchargingstation:demo-favorites:v1' : 'evchargingstation:favorites:v1';
 const sharedFilters = { query: (params.get('q') || '').slice(0, 200), connector: ['combo', 'ac', 'nacs', 'chademo', 'ac3', 'combo2'].includes(params.get('connector')) ? params.get('connector') : '', minPower: [50, 100, 200, 300].includes(Number(params.get('kw'))) ? Number(params.get('kw')) : 0, available: params.get('available') === '1', unrestricted: params.get('public') === '1', freeParking: params.get('parking') === '1', speed: Object.hasOwn(SPEEDS,params.get('speed')) ? params.get('speed') : '', operator: (params.get('operator') || '').slice(0,160), open24: params.get('open24') === '1', sort: ['available', 'distance', 'name', 'count', 'power'].includes(params.get('sort')) ? params.get('sort') : 'available' };
 const state = { manifest: null, fees: null, regions: new Map(), activeCodes: [], national: null, detail: null, detailEpoch: 0, filters: { ...DEFAULT_FILTERS, ...sharedFilters }, favorites: readFavorites(), region: params.get('region') || (params.get('q') ? 'all' : 'auto'), bounds: null, selectedId: null, listLimit: 60, loading: false, error: '', partialError: '', visible: [], summaries: new Map(), center: sharedView?.center || { lat: 37.5665, lng: 126.978 }, demo, sharedId: params.get('station'), loadEpoch: 0, navigationRevision: 0 };
@@ -338,11 +349,9 @@ function render() {
   const previousListScroll = list.scrollTop;
   listScrollSelection?.suppress();
   // Keep the ad node and its iframe connected while result cards change.
-  $('listBeforeAd').innerHTML = shown.length ? shown.slice(0, BANNER_AFTER).map(stationCard).join('') : emptyHTML();
-  $('listAfterAd').innerHTML = shown.slice(BANNER_AFTER).map(stationCard).join('')
-    + (state.visible.length > shown.length ? `<button type="button" class="button show-more" data-action="more">충전소 더 보기 (${shown.length.toLocaleString('ko-KR')} / ${state.visible.length.toLocaleString('ko-KR')})</button>` : '');
-  banner.update(shown.length);
+  listAds.render({shown,total:state.visible.length,card:stationCard,empty:emptyHTML(),more:state.visible.length > shown.length ? `<button type="button" class="button show-more" data-action="more">충전소 더 보기 (${shown.length.toLocaleString('ko-KR')} / ${state.visible.length.toLocaleString('ko-KR')})</button>` : ''});
   list.scrollTop = previousListScroll;
+  syncAds();
   if (state.selectedId) queueSelectedListReveal(state.selectedId);
   const warningCodes = new Set((state.manifest?.warnings || []).map(item => item.code));
   const knownWarnings = new Set(['NOT_CONFIGURED', 'UNCONFIGURED', 'INITIALIZING', 'INVALID_COORDINATES']);
@@ -581,6 +590,7 @@ async function selectStation(id, { preserveView = false, origin = 'list' } = {})
       $('detailContent').dataset.stationId = '';
       $('detailContent').innerHTML = `<div class="detail-toolbar"><h2 id="detailTitle">${esc(station.name)}</h2><button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button></div><div class="loading-state"><span class="loader"></span><p>충전소 상세 정보를 불러오고 있습니다</p></div>`;
       if (!$('stationDialog').open) $('stationDialog').show();
+      syncAds();
       $('stationDialog').scrollTop = 0;
     }
     try {
@@ -608,6 +618,7 @@ async function selectStation(id, { preserveView = false, origin = 'list' } = {})
   renderDetails(station);
   // Nonmodal panel preserves an interactive, unblurred map and list.
   if (!$('stationDialog').open) $('stationDialog').show();
+  syncAds();
   queueSelectedListReveal(id);
   void refreshSelectedStatus();
 }
@@ -617,6 +628,7 @@ function closeDetails() {
   state.detail = null;
   cancelSelectedListReveal();
   $('stationDialog').close();
+  syncAds();
   document.body.append($('toast'));
   state.selectedId = null;
   preserveSelectedView = false;
@@ -762,6 +774,7 @@ function setMobileView(view) {
   $('mapTab').classList.toggle('active', view === 'map'); $('listTab').classList.toggle('active', view !== 'map');
   $('mapTab').setAttribute('aria-pressed', String(view === 'map')); $('listTab').setAttribute('aria-pressed', String(view !== 'map'));
   if (view === 'map') requestAnimationFrame(() => map?.resize());
+  syncAds();
 }
 
 async function initializeMap() {
@@ -785,7 +798,7 @@ async function initializeMap() {
 }
 
 function bindEvents() {
-  listScrollSelection = bindListScrollSelection($('listContent'),selectScrolledStation,{onIntent:()=>{selectionOrigin='scroll';cancelSelectedListReveal();}});
+  listScrollSelection = bindListScrollSelection($('listContent'),selectScrolledStation,{onIntent:()=>{selectionOrigin='scroll';cancelSelectedListReveal();bottomAd.setReading(true);}});
   $('searchForm').addEventListener('submit', event => { event.preventDefault(); clearTimeout(inputTimer); changeFilters({ query: $('searchInput').value }); });
   $('searchInput').addEventListener('input', event => { const query = event.target.value; state.filters.query = query; clearTimeout(inputTimer); inputTimer = setTimeout(() => changeFilters({ query }), 200); });
   $('clearSearch').addEventListener('click', () => { clearTimeout(inputTimer); changeFilters({ query: '' }); $('searchInput').focus(); });
@@ -801,9 +814,13 @@ function bindEvents() {
   $('favoriteToggle').addEventListener('click', () => changeFilters({ favorites: !state.filters.favorites }));
   $('filtersToggle').addEventListener('click', () => {
     if (!$('filterDialog').open) $('filterDialog').showModal();
+    syncAds();
     $('filtersToggle').setAttribute('aria-expanded', 'true');
   });
   $('closeFilters').addEventListener('click', () => $('filterDialog').close());
+  $('filterDialog').addEventListener('close',syncAds);
+  window.addEventListener('resize',syncAds,{passive:true});
+  $('welcomeHelp').addEventListener('click',()=>welcomeAd.open());
   $('viewFilterResults').addEventListener('click', () => $('filterDialog').close());
   $('filterDialog').addEventListener('close', () => $('filtersToggle').setAttribute('aria-expanded', 'false'));
   $('filterDialog').addEventListener('click', event => {
@@ -912,5 +929,6 @@ function startPolling() {
   refreshTimer = setInterval(() => { if (document.hidden) return; if (!demo) { void refreshSelectedStatus(); refresh(); } else { render(); const station = currentStation(); if (station && $('stationDialog').open) renderDetails(station); } }, 60000);
 }
 startPolling();
+welcomeAd.start();
 window.addEventListener('pagehide', () => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); cancelAnimationFrame(selectedListFrame); listScrollSelection?.destroy(); });
 window.addEventListener('pageshow', event => { if (event.persisted) { startPolling(); if (!demo) refresh(); } });

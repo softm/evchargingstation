@@ -103,3 +103,7 @@ node tests/map-utils.test.mjs
 ```
 
 좌표 미제공 처리, 목록 번호 일치, 잘못된 상태 집계, 수집 문구의 HTML 안전 처리, 선택 후 idle·resize 재조회 억제, 경계 포함 판정, 원본 팝업·라벨 배치, 원문 SHA 일치를 검사한다. 실제 제공자의 네트워크·키 허용 Origin과 모바일 지도 조작은 브라우저 통합 검증으로 확인해야 한다.
+
+## 7. 광고 UX 참고 (2026-10-21)
+
+`homecare-nationwide-care-services-map`의 `care-list-ads.js`, `care-list-ads.css`, `care-list-ad-config.js`, `nationwide-care-ad-config.js`, `index.html`에서 하단 세션 접힘·목록 읽기 중 임시 접힘·미노출 공간 반환·세션 웰컴 구조를 참고했다. 충전한눈의 모듈·stationId 선택·지도 공간 계산에 맞춰 다시 구현했다. 원본 광고 ID, 제휴 대체 소재, 비공식 SDK API는 재사용하지 않았다. 상세 운영 기준은 [ADS.md](ADS.md)를 따른다.

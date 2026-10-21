@@ -1,8 +1,23 @@
-/* In the list's normal scroll flow; no fixed banner consumes result height. */
+/* Real banners stay at their issued size. Missing/failed placements consume no space. */
+:root{--ev-ad-space:0px}
+.app-layout{height:calc(100dvh - var(--header) - var(--ev-ad-space))}
+body.is-demo .app-layout{height:calc(100dvh - var(--header) - 39px - var(--ev-ad-space))}
 .list-content{container-type:inline-size}
-.adfit-banner{margin:20px 0;padding:16px 0 20px;border-block:1px solid var(--line);text-align:center;overflow:visible;min-width:0}
-.adfit-label{display:block;margin-bottom:12px;color:#718079;font-size:10px;line-height:16px;letter-spacing:.06em}
-.adfit-creative{width:320px;height:100px;margin-inline:auto;overflow:visible}
-.adfit-preview .adfit-creative{display:flex;align-items:center;justify-content:center;background:#f3f6f4;border:1px dashed #adbbb2;font-size:11px;color:#5b6f63}
-@container(max-width:319px){.adfit-banner{display:none}}
-@media(max-width:335px){.adfit-banner{display:none}}
+.adfit-banner{margin:22px 0;padding:16px 0 20px;border-block:1px solid var(--line);text-align:center;min-width:0}
+.adfit-label{display:block;margin:0 0 12px;color:#718079;font-size:11px;line-height:16px}
+.adfit-creative{width:var(--ad-width,320px);height:var(--ad-height,100px);margin-inline:auto;flex:none}
+[data-ad-mode="preview"] .adfit-creative,.welcome-ad-preview{display:flex;align-items:center;justify-content:center;white-space:pre-line;background:#f3f6f4;border:1px dashed #adbbb2;color:#52685a;font-size:12px;line-height:1.7;text-align:center}
+.ad-bottom{position:fixed;inset:auto 0 0;z-index:530;display:flex;align-items:center;flex-direction:column;padding-bottom:env(safe-area-inset-bottom);background:#fff;border-top:1px solid var(--line);box-shadow:0 -2px 10px #17362b08}
+.ad-bottom-toggle{min-height:44px;min-width:108px;padding:10px 16px;font-size:12px;color:#52695b;background:#fff;flex:none}
+.ad-bottom-panel{width:100%;padding:8px 0 18px;text-align:center}
+.ad-bottom-panel .adfit-label{margin-bottom:10px}
+body .station-dialog{bottom:calc(20px + var(--ev-ad-space));max-height:calc(100dvh - var(--header) - 24px - var(--ev-ad-space))}
+body .toast{bottom:calc(24px + var(--ev-ad-space))}
+.welcome-dialog{position:fixed;inset:0;margin:auto;width:440px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:var(--ink);box-shadow:var(--shadow);overflow:auto;scroll-padding-top:60px}
+.welcome-dialog::backdrop{background:#173b2c35}
+.welcome-heading{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px 8px 20px;background:#fff;border-bottom:1px solid var(--line);z-index:2}
+.welcome-heading h2{font-size:18px;line-height:1.5;margin:0}.welcome-heading button{flex:none;width:44px;height:44px;font-size:24px}
+.welcome-body{padding:20px;font-size:14px;line-height:1.8}.welcome-body p{margin:0 0 14px}.welcome-body .button{font-size:14px;min-height:44px;width:100%;margin-top:18px}
+.welcome-ad-preview{min-height:100px;margin-top:18px;padding:12px;flex-direction:column;gap:6px}.welcome-ad-preview strong{font-size:12px}
+@media(max-width:760px){body .station-dialog{bottom:var(--ev-ad-space);max-height:calc(88dvh - var(--ev-ad-space))}.ad-bottom-panel{padding-bottom:12px}.welcome-body{padding:16px}}
+@media(max-width:335px){.list-content{padding-inline:0;scrollbar-gutter:auto}}

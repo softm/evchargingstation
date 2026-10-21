@@ -10,8 +10,8 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./css/app.css">
   <link rel="stylesheet" href="./css/layout.css">
-  <link rel="stylesheet" href="./css/ads.css">
   <link rel="stylesheet" href="./css/details.css">
+  <link rel="stylesheet" href="./css/ads.css">
   <script src="./config.js"></script>
   <script src="./ad-config.js"></script>
   <script type="module" src="./js/app.js"></script>
@@ -60,7 +60,7 @@
         <details id="resultNotice" class="result-notice" hidden><summary id="resultNoticeSummary" aria-live="polite">정보 확인이 필요합니다</summary><div id="resultNoticeDetail" class="notice-detail"></div></details>
         <div id="listContent" class="list-content" tabindex="0" role="region" aria-label="충전소 목록" aria-description="목록을 스크롤하면 중앙에 가까운 충전소가 선택되고 지도가 함께 이동합니다."><div id="listBeforeAd"><div class="loading-state"><span class="loader"></span><p>충전소 정보를 확인하고 있습니다</p></div></div><aside id="adfitBanner" class="adfit-banner" aria-label="광고" data-ad-state="unconfigured" hidden><span class="adfit-label">광고</span><div class="adfit-creative"></div></aside><div id="listAfterAd"></div></div>
       </section>
-      <footer class="sidebar-footer"><a href="./data-status.html">수집 현황</a><a href="https://www.data.go.kr/data/15076352/openapi.do" target="_blank" rel="noopener noreferrer">출처<svg class="icon"><use href="#i-external"/></svg></a><details><summary>데이터 안내</summary><div class="sidebar-info"><h2>데이터·조회 안내</h2><div id="freshnessLine" class="freshness-line"><svg class="icon"><use href="#i-clock"/></svg><span>충전 상태 확인 시각을 함께 표시합니다</span></div><p id="inventoryTime">시설 정보 갱신 시각: 확인 중</p><p>지도 주변 검색은 화면과 겹치는 최대 4개 지역의 데이터를 사용합니다. 지도를 확대하거나 지역을 직접 선택해 조회 범위를 조정할 수 있습니다.</p><p>충전소별 확인 시각과 운영 정보를 확인하세요. 충전 상태는 현장과 다를 수 있으며, 충전 대기 표시는 예약을 의미하지 않습니다. 요금과 이용 조건은 운영사에서 확인하세요.</p><p>한국환경공단 공공데이터를 활용하는 민간 서비스이며 정부기관과 무관합니다.</p><p><a href="./privacy.html">개인정보 처리 안내</a></p></div></details><span>민간 서비스</span></footer>
+      <footer class="sidebar-footer"><a href="./data-status.html">수집 현황</a><a href="https://www.data.go.kr/data/15076352/openapi.do" target="_blank" rel="noopener noreferrer">출처<svg class="icon"><use href="#i-external"/></svg></a><details><summary>데이터 안내</summary><div class="sidebar-info"><h2>데이터·조회 안내</h2><div id="freshnessLine" class="freshness-line"><svg class="icon"><use href="#i-clock"/></svg><span>충전 상태 확인 시각을 함께 표시합니다</span></div><p id="inventoryTime">시설 정보 갱신 시각: 확인 중</p><p>지도 주변 검색은 화면과 겹치는 최대 4개 지역의 데이터를 사용합니다. 지도를 확대하거나 지역을 직접 선택해 조회 범위를 조정할 수 있습니다.</p><p>충전소별 확인 시각과 운영 정보를 확인하세요. 충전 상태는 현장과 다를 수 있으며, 충전 대기 표시는 예약을 의미하지 않습니다. 요금과 이용 조건은 운영사에서 확인하세요.</p><p>한국환경공단 공공데이터를 활용하는 민간 서비스이며 정부기관과 무관합니다.</p><p><a href="./privacy.html">개인정보 처리 안내</a></p><button id="welcomeHelp" class="text-button" type="button">서비스 안내 다시 보기</button></div></details><span>민간 서비스</span></footer>
     </aside>
 
     <section class="map-section" aria-label="충전소 지도">
@@ -80,6 +80,8 @@
     <div class="filter-dialog-footer"><button id="resetFilters" class="text-button" type="button">조건 초기화</button><button id="viewFilterResults" class="button primary" type="button">결과 보기</button></div>
   </dialog>
   <dialog id="stationDialog" class="station-dialog" data-map-obstacle aria-labelledby="detailTitle"><div id="detailContent"></div></dialog>
+  <aside id="bottomAd" class="ad-bottom" aria-label="하단 광고" hidden><button type="button" class="ad-bottom-toggle" aria-controls="bottomAdPanel" aria-expanded="false">광고 펼치기</button><div id="bottomAdPanel" class="ad-bottom-panel" hidden><span class="adfit-label">광고</span><div class="adfit-creative"></div></div></aside>
+  <dialog id="welcomeAdDialog" class="welcome-dialog" aria-labelledby="welcomeTitle" aria-describedby="welcomeDescription"><div class="welcome-heading"><h2 id="welcomeTitle">충전한눈에 오신 것을 환영합니다</h2><button type="button" data-welcome-close aria-label="환영 안내 닫기" autofocus>×</button></div><div class="welcome-body"><p id="welcomeDescription">지역·충전소명으로 검색하고, 내 차에 맞는 커넥터와 충전 출력을 확인하세요.</p><p>충전기별 상태와 마지막 확인 시각을 함께 확인하고 방문해 주세요.</p><div class="welcome-ad-preview" hidden><strong>광고 영역 미리보기</strong><span>실제 광고가 아닙니다 · 팝업 광고 호출 비활성</span></div><button type="button" class="button primary" data-welcome-close>충전소 찾기 시작</button></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <noscript><div class="noscript">충전소를 검색하려면 브라우저에서 JavaScript를 활성화해 주세요.</div></noscript>
 </body>
