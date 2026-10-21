@@ -33,6 +33,8 @@ function render(manifest, build, fees) {
     ['상태 연속 수집 기준', time(manifest.statusCoverageAt)],
     ['충전기 상태 신선도', result.statusFresh ? '최근 수집 범위 확인 · 개별 충전기 상태는 상세에서 확인' : '현재 상태 재확인 필요'],
     ['예약 자동 수집', schedule],
+    ['화면 자동 확인', '1분마다 게시된 자료 확인 · 원본 수집 실행과 별개'],
+    ['전국 검색 자료', manifest.searchIndex ? `${number(manifest.searchIndex.stationCount)}곳 · ${number(manifest.searchIndex.chargerCount)}기 · JSON.gz ${bytes(manifest.searchIndex.publishedBytes)}` : '아직 게시되지 않음'],
     ['사이트 배포', time(build.builtAt)],
     ['시간 기준', '한국 시간 (Asia/Seoul)'],
   ];

@@ -1,13 +1,13 @@
 import { distanceKm, filterStations, hasCoordinates } from './domain.js';
 
-export function compareStations(a, b, sort, summaries, center) {
+export function compareStations(a, b, sort, summaries, center, distances) {
   if (sort === 'name') return a.name.localeCompare(b.name, 'ko');
   const field = {available:'available',count:'matching',power:'maxPower'}[sort];
   if (field) {
     const delta = (summaries.get(b.id)?.[field] || 0) - (summaries.get(a.id)?.[field] || 0);
     if (delta) return delta;
   }
-  return distanceKm(center, a) - distanceKm(center, b) || a.name.localeCompare(b.name, 'ko');
+  return (distances?.get(a.id) ?? distanceKm(center, a)) - (distances?.get(b.id) ?? distanceKm(center, b)) || a.name.localeCompare(b.name, 'ko');
 }
 
 export function nearbyAlternatives(station, stations, regions, filters, now = Date.now(), threshold = 600, radiusKm = 5, limit = 3) {

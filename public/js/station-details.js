@@ -56,7 +56,7 @@ export function chargerLocation(station, charger) {
 
 const hasChargerFilter = filters => Boolean(filters?.connector || filters?.speed || Number(filters?.minPower) > 0 || filters?.available);
 
-export function statusSummaryHTML(station, region, {now = Date.now(), threshold = 600, filters = {}} = {}) {
+export function statusSummaryHTML(station, region, {now = Date.now(), threshold = 600, filters = {}, formatTime = value => new Date(value).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} = {}) {
   const c = stationStatusCounts(station, region, now, threshold);
   if (!c.total) return '<p class="detail-status-lead unknown"><strong>등록된 충전기 정보가 없어요</strong></p>';
   const filtered = hasChargerFilter(filters);
@@ -68,10 +68,15 @@ export function statusSummaryHTML(station, region, {now = Date.now(), threshold 
     : selected.available ? `최근 확인된 대기 충전기 ${selected.available}기`
     : selected.unknown ? '확인된 상태에서 대기 충전기가 없어요' : '최근 확인된 대기 충전기가 없어요';
   const items = [['available','충전 대기'],['charging','충전 중'],['unavailable','중지·점검·예약'],['unknown','확인 필요']];
+  const confirmations = (station.chargers || []).map(charger => chargerState(charger,region,now,threshold).confirmedAt).filter(value => value !== null);
+  const latest = confirmations.length ? Math.max(...confirmations) : null;
+  const minutes = latest === null ? null : Math.max(0,Math.floor((now - latest) / 60000));
+  const age = minutes === null ? '시각 미제공' : minutes < 1 ? '방금 확인' : minutes < 60 ? `${minutes}분 전 확인` : `${Math.floor(minutes / 60)}시간 ${minutes % 60}분 전 확인`;
   return `<div class="detail-status-lead ${selected.available ? 'available' : 'unknown'}"><span>${filtered ? `커넥터·출력 조건 일치 ${selected.total}기 / 전체 ${c.total}기` : `충전소 전체 ${c.total}기 기준`}${filters.available ? ` · 충전 대기 필터 일치 ${selected.available}기` : ''}</span><strong>${message}</strong>${selected.unknown ? `<small>${selected.total}기 중 ${selected.unknown}기는 현재 상태를 다시 확인해 주세요.</small>` : ''}</div>
+    <div class="detail-status-update"><p>가장 최근 상태 확인 <strong>${latest === null ? '시각 미제공' : esc(formatTime(latest,true))}</strong><br>${age}${latest !== null && now - latest > threshold * 1000 ? ' · 상태 수집 지연' : ''}</p><button class="button" type="button" data-action="refresh-status">게시된 최신 자료 확인</button></div>
     <p class="detail-status-scope">충전소 전체 ${c.total}기${filtered ? ' · 검색 조건 밖 충전기도 포함' : ''}</p>
     <div class="detail-status-grid" aria-label="충전소 전체 충전기 상태 요약">${items.map(([key,label]) => `<div class="detail-status ${key}${c[key] === 0 ? ' is-zero' : ''}"><span>${label}</span><strong>${c[key]}<small>기</small></strong></div>`).join('')}</div>
-    <p class="detail-explanation">${Math.round(threshold / 60)}분 이내 확인한 상태만 집계하며 지연·통신 이상은 확인 필요로 표시합니다. 주차면 점유·대기 차량 정보는 제공되지 않습니다.</p>`;
+    <p class="detail-explanation">${Math.round(threshold / 60)}분 이내 확인한 상태만 집계하며 지연·통신 이상은 확인 필요로 표시합니다. 화면은 1분마다 게시된 자료를 확인하지만 원본 수집이 지연되면 현재 상태를 알 수 없습니다. 주차면 점유·대기 차량 정보는 제공되지 않습니다.</p>`;
 }
 
 export function stationFeeCoverage(catalog, station, {demo = false} = {}) {

@@ -59,8 +59,9 @@ jobs:
           if [ "$EVENT_NAME" = 'push' ] && [[ "$COMMIT_MESSAGE" == *"[collect:full]"* ]]; then
             # A single commit can deliberately force a full national rescan.
             mode=full
-          # Code-only pushes normally reuse the last verified inventory.
-          elif [ "$EVENT_NAME" = 'push' ] && python3 -c 'import json,pathlib,sys; p=pathlib.Path("public/data/manifest.json"); m=json.loads(p.read_text()); base=p.parent; sys.exit(0 if m.get("generatedAt") and m.get("totalStations",0)>0 and m.get("regions") and all((base/r["path"]).is_file() for r in m["regions"]) else 1)'; then
+          # Reuse only a recent verified snapshot. An hours-old cache must not
+          # become a successful code deployment with stale charger statuses.
+          elif [ "$EVENT_NAME" = 'push' ] && python3 scripts/can-reuse-snapshot.py public/data/manifest.json; then
             mode=skip
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"

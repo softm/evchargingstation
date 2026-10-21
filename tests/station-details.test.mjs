@@ -30,6 +30,16 @@ test('status copy distinguishes unknown availability, confirmed zero, partial un
   assert.doesNotMatch(html([]),/detail-status-grid/);
 });
 
+test('the prominent last-confirmed time cannot be fabricated from a status-change date or a future report',()=>{
+  const missing=statusSummaryHTML({chargers:[charger('2',{observedAt:null,statusChangedAt:observedAt})]},{},{now});
+  assert.match(missing,/가장 최근 상태 확인 <strong>시각 미제공/);
+  const old=statusSummaryHTML({chargers:[charger('2',{observedAt:'2026-10-20T22:00:00Z'})]},{},{now});
+  assert.match(old,/2시간 0분 전 확인 · 상태 수집 지연/);
+  assert.match(old,/현재 충전 상태를 확인할 수 없어요/);
+  const future=statusSummaryHTML({chargers:[charger('2',{observedAt:'2026-10-21T01:00:00Z'})]},{},{now});
+  assert.match(future,/가장 최근 상태 확인 <strong>시각 미제공/);
+});
+
 test('a mixed-connector station states the selected scope and does not advertise an AC charger as waiting for DC',()=>{
   const station={chargers:[charger('3'),charger('2',{id:'02',type:'02',outputKw:7})]};
   const filters={connector:'combo'};

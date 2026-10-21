@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { compressRegionFiles } from './compress-data.mjs';
+import { buildSearchIndex } from './build-search-index.mjs';
 import { validAdUnit } from '../public/js/ads.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -34,6 +35,8 @@ console.log(`AdFit banner: ${adConfig.enabled && adConfig.unit ? 'configured (se
 const manifest = JSON.parse(await readFile(path.join(output, 'data/manifest.json'), 'utf8'));
 if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.regions)) throw new Error('Invalid data manifest');
 const compression = await compressRegionFiles(path.join(output, 'data'), manifest);
+const searchIndex = await buildSearchIndex(path.join(output, 'data'), manifest);
 await writeFile(path.join(output, 'data/manifest.json'), JSON.stringify(manifest) + '\n');
 await writeFile(path.join(output, 'build-info.json'), JSON.stringify({version:'0.1.0',builtAt:new Date().toISOString(),sourceRevision:process.env.GITHUB_SHA||null,dataMode:manifest.mode,scheduledCollectionEnabled:process.env.SCHEDULED_COLLECTION_ENABLED==='true'},null,2)+'\n');
 console.log(`Built dist/ — ${manifest.mode}, ${manifest.totalStations || 0} stations. Region bytes ${compression.originalBytes} -> ${compression.publishedBytes}, gzip ${compression.gzipRegions}/${compression.regions}. No API secret is bundled.`);
+console.log(`National search: ${searchIndex.stationCount} stations, ${searchIndex.originalBytes} -> ${searchIndex.publishedBytes} bytes.`);

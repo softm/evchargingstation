@@ -1,4 +1,5 @@
 import { intersects } from './domain.js';
+import { unpackSearchIndex } from './national-search.js';
 
 /**
  * Regional map search envelopes (representative points and deliberately generous radii).
@@ -72,6 +73,8 @@ export class DataClient {
     this.base = new URL(`${String(config.apiBaseUrl || config.dataBaseUrl || './data').replace(/\/$/, '')}/`, location.href);
     this.cache = new Map();
     this.pendingRegions = new Map();
+    this.searchCache = null;
+    this.pendingSearch = new Map();
   }
 
   async request(path, signal) {
@@ -106,6 +109,23 @@ export class DataClient {
     if (!Array.isArray(value.operators) || value.currency !== 'KRW' || value.unit !== 'kWh')
       throw new Error('충전요금 데이터 형식을 확인할 수 없습니다.');
     return value;
+  }
+
+  async nationwide(entry) {
+    if (!entry || !/^search\/stations-[a-f0-9]{20}\.json\.gz$/.test(entry.path || '')) throw new Error('전국 검색 자료가 아직 준비되지 않았습니다. 새로고침해 주세요.');
+    if (this.searchCache?.path === entry.path) return this.searchCache.data;
+    let task = this.pendingSearch.get(entry.path);
+    if (!task) {
+      task = this.request(entry.path).then(value => {
+        if (value.regions?.some(region => region.mode === 'demo')) throw new Error('실제 검색 자료에서 예시 데이터가 감지되었습니다.');
+        const data = unpackSearchIndex(value,entry);
+        this.searchCache = {path:entry.path,data};
+        return data;
+      });
+      this.pendingSearch.set(entry.path,task);
+    }
+    try { return await task; }
+    finally { if (this.pendingSearch.get(entry.path) === task) this.pendingSearch.delete(entry.path); }
   }
 
   async region(entry, { force = false, signal } = {}) {

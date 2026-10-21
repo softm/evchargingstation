@@ -51,18 +51,26 @@ export function typeInfo(type) {
   return TYPES[code] || { name: code && code !== '00' ? `기타 커넥터 (${code})` : '커넥터 미확인', connectors: [] };
 }
 
+const parsedTimes = new Map();
 function timestamp(value) {
   if (typeof value !== 'string' || !value.trim()) return null;
+  if (parsedTimes.has(value)) return parsedTimes.get(value);
   const result = Date.parse(value);
-  return Number.isFinite(result) ? result : null;
+  const parsed = Number.isFinite(result) ? result : null;
+  if (parsedTimes.size >= 4096) parsedTimes.clear();
+  parsedTimes.set(value,parsed);
+  return parsed;
 }
 
 export function confirmation(charger, region, now = Date.now(), threshold = 600) {
-  const candidates = [timestamp(charger.observedAt), region?.complete === false ? null : timestamp(region?.statusCoverageAt)].filter(value => value !== null);
-  const valid = candidates.filter(value => value <= now + 60000);
-  const confirmedAt = valid.length ? Math.max(...valid) : null;
+  const observed = timestamp(charger.observedAt);
+  const coverage = region?.complete === false ? null : timestamp(region?.statusCoverageAt);
+  const latestAllowed = now + 60000;
+  const validObserved = observed !== null && observed <= latestAllowed ? observed : null;
+  const validCoverage = coverage !== null && coverage <= latestAllowed ? coverage : null;
+  const confirmedAt = validObserved === null ? validCoverage : validCoverage === null ? validObserved : Math.max(validObserved,validCoverage);
   const fresh = confirmedAt !== null && now - confirmedAt <= Math.max(1, Number(threshold) || 600) * 1000;
-  return { fresh, confirmedAt, futureTimestamp: candidates.some(value => value > now + 60000), reason: fresh ? 'fresh' : confirmedAt === null ? 'unknown' : 'stale' };
+  return { fresh, confirmedAt, futureTimestamp: observed !== null && observed > latestAllowed || coverage !== null && coverage > latestAllowed, reason: fresh ? 'fresh' : confirmedAt === null ? 'unknown' : 'stale' };
 }
 
 export function chargerState(charger, region, now = Date.now(), threshold = 600) {

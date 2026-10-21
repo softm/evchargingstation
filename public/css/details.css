@@ -1,4 +1,5 @@
 /* 충전소 상세: 상태의 범위와 자료 유무를 먼저 알리고, 긴 기록은 접어서 제공한다. */
+.mode-badge.delayed{color:#805b26}.mode-badge.delayed .status-dot{background:#98702f}
 .station-dialog{scroll-padding-top:88px}
 .detail-toolbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:12px;padding:8px 16px 8px 24px;background:#fff;border-bottom:1px solid var(--line)}
 .detail-toolbar h2{flex:1;min-width:0;margin:0;font-size:19px;line-height:1.5;letter-spacing:-.5px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -13,6 +14,7 @@
 .detail-status-lead>span,.detail-status-lead>small{font-size:12px;color:#53695d}
 .detail-status-lead>strong{font-size:17px;color:#284f3a;font-weight:700}.detail-status-lead.unknown>strong{color:#795b27}
 .detail-status-scope{font-size:12px;color:#53695d;margin:14px 0 6px;line-height:1.6}
+.detail-status-update{font-size:12px;line-height:1.8;margin:10px 0;color:#53695d}.detail-status-update p{margin:0 0 8px}.detail-status-update strong{font-weight:600}.detail-status-update .button{min-height:44px;white-space:normal}
 .detail-status-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0}
 .detail-status{padding:12px 5px;text-align:center;border:1px solid #dbe5de;border-radius:9px;background:#f5f7f6;min-width:0;display:flex;flex-direction:column;gap:6px;color:#52675b;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 .detail-status strong{font-size:26px;line-height:1.2;font-variant-numeric:tabular-nums;color:var(--ink)}

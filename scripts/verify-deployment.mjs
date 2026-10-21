@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { gunzipSync } from 'node:zlib';
 import { summarizeCollection } from '../public/js/data-status-model.js';
 import { validAdUnit } from '../public/js/ads.js';
+import { unpackSearchIndex } from '../public/js/national-search.js';
 
 const rawUrl = process.env.DEPLOYMENT_URL || process.argv[2];
 if (!rawUrl) throw new Error('Set DEPLOYMENT_URL or provide the published app URL.');
@@ -50,6 +51,12 @@ async function verify() {
       || !statusPage.includes('./js/data-status.js') || !statusScript.includes('summarizeCollection')
       || !statusCss.includes('.metrics')) throw new Error('Mandatory data status page or its entry link/assets are missing.');
   if (summarizeCollection(manifest).problems.length) throw new Error('Published collection totals do not match regional results.');
+  if (!manifest.searchIndex || !/^search\/stations-[a-f0-9]{20}\.json\.gz$/.test(manifest.searchIndex.path)
+      || manifest.searchIndex.stationCount !== manifest.totalStations || manifest.searchIndex.chargerCount !== manifest.totalChargers
+      || !app.includes('loadNationwide')) throw new Error('Published nationwide search assets or counts are missing.');
+  const searchBytes = await get('data/' + manifest.searchIndex.path,'bytes');
+  const searchData = JSON.parse(new TextDecoder().decode(searchBytes[0] === 0x1f && searchBytes[1] === 0x8b ? gunzipSync(searchBytes) : searchBytes));
+  unpackSearchIndex(searchData,manifest.searchIndex);
   if (typeof build.scheduledCollectionEnabled !== 'boolean') throw new Error('Published collection schedule setting is missing.');
   if (fees.schemaVersion !== 1 || fees.currency !== 'KRW' || fees.unit !== 'kWh' || !Array.isArray(fees.operators)
       || fees.operators.some(operator => !operator.operatorId || !Array.isArray(operator.rates))) {
