@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { compressRegionFiles } from './compress-data.mjs';
 import { buildSearchIndex } from './build-search-index.mjs';
+import { versionAssets } from './version-assets.mjs';
 import { validAdUnit } from '../public/js/ads.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -11,6 +12,7 @@ const output = path.join(root, 'dist');
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 await cp(path.join(root, 'public'), output, { recursive: true, filter: p => !/\.(?:DS_Store|pyc)$/.test(p) });
+await versionAssets(output, process.env.GITHUB_SHA || 'local');
 const context = { window: {} };
 vm.runInNewContext(await readFile(path.join(root, 'public/config.js'), 'utf8'), context);
 const config = { ...context.window.EV_CONFIG };

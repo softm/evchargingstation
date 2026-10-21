@@ -16,10 +16,11 @@ async function buildInfo() {
   } catch { return {}; }
 }
 
-function render(manifest, build, fees) {
+function render(manifest, build, fees, attempt) {
   const result = summarizeCollection(manifest);
   const warnings = (manifest.warnings || []).map(warning => `수집 알림: ${warning.code || 'UNKNOWN'}`);
-  const problems = [...result.problems, ...warnings];
+  const attemptLabel = attempt?.status === 'error' ? `실패 · ${attempt.code === 'NETWORK_ERROR' ? '수집 API 통신 오류' : '원본 수집 오류'}` : attempt?.status === 'success' ? '성공' : '기록 미등록';
+  const problems = [...result.problems, ...warnings, ...(attempt?.status === 'error' ? [`최근 원본 수집 시도 ${attemptLabel}. 이전 정상 자료와 원래 확인 시각을 유지합니다.`] : [])];
   const notice = $('loadStatus');
   notice.className = `notice${problems.length || (result.hasData && !result.statusFresh) ? ' warning' : ''}`;
   notice.textContent = !result.hasData ? '아직 게시된 수집 데이터가 없습니다.' : problems.length ? '수집된 데이터를 표시합니다. 아래 확인 항목을 살펴보세요.' : result.statusFresh ? '수집 결과가 게시되어 있습니다. 최근 상태 수집 범위를 확인했습니다.' : '수집 결과가 게시되어 있습니다. 충전기 상태 갱신이 오래되어 현재 상태는 확인이 필요합니다.';
@@ -33,6 +34,7 @@ function render(manifest, build, fees) {
     ['상태 연속 수집 기준', time(manifest.statusCoverageAt)],
     ['충전기 상태 신선도', result.statusFresh ? '최근 수집 범위 확인 · 개별 충전기 상태는 상세에서 확인' : '현재 상태 재확인 필요'],
     ['예약 자동 수집', schedule],
+    ['최근 원본 수집 시도', `${time(attempt?.attemptedAt)} · ${attemptLabel}`],
     ['화면 자동 확인', '1분마다 게시된 자료 확인 · 원본 수집 실행과 별개'],
     ['전국 검색 자료', manifest.searchIndex ? `${number(manifest.searchIndex.stationCount)}곳 · ${number(manifest.searchIndex.chargerCount)}기 · JSON.gz ${bytes(manifest.searchIndex.publishedBytes)}` : '아직 게시되지 않음'],
     ['사이트 배포', time(build.builtAt)],
@@ -55,9 +57,9 @@ async function refresh() {
   $('regionRows').querySelectorAll('button').forEach(button => {button.disabled = true;});
   $('loadStatus').textContent = '게시된 수집 결과를 다시 확인하고 있습니다.';
   try {
-    const [manifest, build, fees] = await Promise.all([client.manifest(), buildInfo(), client.fees().catch(() => null)]);
+    const [manifest, build, fees, attempt] = await Promise.all([client.manifest(), buildInfo(), client.fees().catch(() => null), client.collectionAttempt().catch(() => null)]);
     currentManifest = manifest;
-    render(manifest, build, fees);
+    render(manifest, build, fees, attempt);
   } catch {
     $('loadStatus').className = 'notice error';
     $('loadStatus').textContent = currentManifest ? '최신 결과를 읽지 못했습니다. 아래에는 이전에 읽은 결과를 유지합니다. 현황 새로고침을 다시 눌러 주세요.' : '수집 결과를 읽지 못했습니다. 연결 상태를 확인하고 현황 새로고침을 눌러 주세요.';

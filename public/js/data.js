@@ -86,7 +86,7 @@ export class DataClient {
     if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
     try {
       const response = await fetch(url, {
-        cache: path === 'manifest.json' || path === 'fees.json' ? 'no-store' : 'default',
+        cache: ['manifest.json','fees.json','collection-attempt.json'].includes(path) ? 'no-store' : 'default',
         signal: controller.signal,
         headers: { Accept: 'application/json, application/gzip' },
       });
@@ -110,6 +110,8 @@ export class DataClient {
       throw new Error('충전요금 데이터 형식을 확인할 수 없습니다.');
     return value;
   }
+
+  async collectionAttempt() { return this.request('collection-attempt.json'); }
 
   async nationwide(entry) {
     if (!entry || !/^search\/stations-[a-f0-9]{20}\.json\.gz$/.test(entry.path || '')) throw new Error('전국 검색 자료가 아직 준비되지 않았습니다. 새로고침해 주세요.');

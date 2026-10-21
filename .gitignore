@@ -11,5 +11,6 @@ coverage/
 public/data/regions/
 public/data/releases/
 public/data/state.json
+public/data/collection-attempt.json
 public/data/raw/
 .openai/

@@ -32,6 +32,7 @@ async function verify() {
   if (!html.includes('id="appLayout"') || !html.includes('./js/app.js')) throw new Error('Published root is not the charging app.');
   if (!build.sourceRevision) throw new Error('Published build has no source revision.');
   if (expectedRevision && build.sourceRevision !== expectedRevision) throw new Error('Published revision does not match this workflow.');
+  if (expectedRevision && !html.includes(`./js/app.js?v=${expectedRevision}`)) throw new Error('Published entrypoint has no release cache version.');
   if (!app.includes('new DataClient(') || !css.includes('.app-layout')) throw new Error('Published application assets are missing.');
   if (!html.includes('./css/layout.css') || !html.includes('id="filterDialog"') || !layoutCss.includes('.filter-dialog')) {
     throw new Error('Published sidebar layout or filter panel assets are missing.');
