@@ -3,6 +3,7 @@ import '../vendor/homecare/care-popup-geometry.js';
 import '../vendor/homecare/map-marker-placement.js';
 
 const INITIAL_CENTER = Object.freeze({ lat: 37.5665, lng: 126.978 });
+export const DEFAULT_BROWSE_ZOOM = 15;
 const LEAFLET = Object.freeze({
   script: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   style: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
@@ -116,7 +117,8 @@ export function buildMarkerModels(stations, { selectedId, summaries = new Map() 
     const facts = [`전체 ${total !== null ? `${total}기` : '기수 미확인'}`];
     if (matching !== null && total !== null && matching < total) facts.push(`조건 일치 ${matching}기`);
     if (power !== null) facts.push(`조건 최대 ${power}kW`);
-    return [{ id, station, number: index + 1, selected: String(selectedId ?? '') === id, tone,
+    const number = index + 1;
+    return [{ id, station, number, rank: number <= 5 ? number : null, selected: String(selectedId ?? '') === id, tone,
       count: total !== null ? `${total}기` : '—', label, facts: facts.join(' · ') }];
   });
 }
@@ -161,15 +163,21 @@ export function selectMarkerModels(stations, bounds, { selectedId, summaries = n
   }
   picked.sort((a, b) => a.index - b.index);
   const originalNumbers = new Map(picked.map(record => [record.id, record.index + 1]));
-  const models = buildMarkerModels(picked.map(record => record.station), { selectedId, summaries }).map(model => ({ ...model, number: originalNumbers.get(model.id) }));
+  const models = buildMarkerModels(picked.map(record => record.station), { selectedId, summaries }).map(model => {
+    const number = originalNumbers.get(model.id);
+    return { ...model, number, rank: number <= 5 ? number : null };
+  });
   const omittedCount = Math.max(0, visibleCount - picked.filter(record => within(box, record.station)).length);
   return { models, visibleCount, candidateCount, omittedCount, limited: omittedCount > 0, limit: cap };
 }
 /** SOFTM-EV-MARKER-CULL END */
 
 export function markerHtml(model) {
-  const description = `${model.station.name || '이름 미제공 충전소'}. ${model.label}. 총 ${model.count}`;
-  return `<div class="ev-map-marker"><button type="button" class="ev-map-pin ev-map-pin--${model.tone}${model.selected ? ' is-selected' : ''}" data-station-id="${escapeHtml(model.id)}" aria-label="${escapeHtml(description)}" aria-pressed="${model.selected}" title="${escapeHtml(description)}"><span class="ev-map-pin-symbol" aria-hidden="true">⚡</span><span class="ev-map-pin-count" aria-hidden="true">${escapeHtml(model.count)}</span><span class="ev-map-pin-label" data-label-level="0" aria-hidden="true" hidden><span class="ev-map-label-title">${escapeHtml(model.station.name || '이름 미제공 충전소')}</span><span class="ev-map-label-context">${escapeHtml(model.label)}</span><span class="ev-map-label-detail">${escapeHtml(model.facts || '')}</span></span></button></div>`;
+  const rank = Number.isInteger(model.rank) && model.rank >= 1 && model.rank <= 5 ? model.rank : null;
+  const description = `${rank ? `${rank}위. ` : ''}${model.station.name || '이름 미제공 충전소'}. ${model.label}. 총 ${model.count}`;
+  const rankClass = rank ? ` is-ranked ev-map-pin--rank-${rank}` : '';
+  const rankBadge = rank ? `<span class="ev-map-pin-rank" aria-hidden="true">${rank}위</span>` : '';
+  return `<div class="ev-map-marker${rank ? ' ev-map-marker--ranked' : ''}"><button type="button" class="ev-map-pin ev-map-pin--${model.tone}${rankClass}${model.selected ? ' is-selected' : ''}" data-station-id="${escapeHtml(model.id)}" aria-label="${escapeHtml(description)}" aria-pressed="${model.selected}" title="${escapeHtml(description)}">${rankBadge}<span class="ev-map-pin-symbol" aria-hidden="true">⚡</span><span class="ev-map-pin-count" aria-hidden="true">${escapeHtml(model.count)}</span><span class="ev-map-pin-label" data-label-level="0" aria-hidden="true" hidden><span class="ev-map-label-title">${escapeHtml(model.station.name || '이름 미제공 충전소')}</span><span class="ev-map-label-context">${escapeHtml(model.label)}</span><span class="ev-map-label-detail">${escapeHtml(model.facts || '')}</span></span></button></div>`;
 }
 
 function mapError(code, message, recoverable = true) {
@@ -253,27 +261,33 @@ function installStyles() {
     .ev-map-pin--available{background:#13a67c}.ev-map-pin--charging{background:#5982fc}.ev-map-pin--unavailable{background:#f15c5c}.ev-map-pin--unknown{background:#f4a22a}.ev-map-pin--restricted{background:#757e90}
     .ev-map-pin-symbol{display:none;font-size:13px;line-height:1}
     .ev-map-pin-count{font-size:12px;letter-spacing:-.2px}.ev-map-pin.is-selected{outline:3px solid #164937;outline-offset:2px;box-shadow:0 0 0 7px #ffffffc9,0 5px 16px #163f3040}
+    .ev-map-pin.is-ranked{bottom:8px;min-width:58px;height:38px;padding:4px 9px 4px 7px;border-width:3px;border-radius:20px;background:#ff9418;box-shadow:0 0 0 3px #ffc04a66,0 6px 14px #a957243d;animation:ev-rank-bounce 1.45s cubic-bezier(.34,1.56,.64,1) infinite;transform-origin:50% 100%}
+    .ev-map-pin.is-ranked::before{content:"";position:absolute;inset:-8px;border:2px solid #ffb32870;border-radius:24px;opacity:.45;pointer-events:none}
+    .ev-map-pin.is-ranked .ev-map-pin-symbol{display:none}.ev-map-pin.is-ranked .ev-map-pin-count{font-size:10px;font-weight:800;opacity:.92}
+    .ev-map-pin-rank{font-size:15px;font-weight:900;letter-spacing:-.5px}.ev-map-pin--rank-1{min-width:66px;height:44px;background:#f08a00;animation-delay:0s}.ev-map-pin--rank-1 .ev-map-pin-rank{font-size:18px}
+    .ev-map-pin--rank-2{animation-delay:.11s}.ev-map-pin--rank-3{animation-delay:.22s}.ev-map-pin--rank-4{animation-delay:.33s}.ev-map-pin--rank-5{animation-delay:.44s}
+    @keyframes ev-rank-bounce{0%,100%{transform:translateX(-50%) translateY(0) scale(1)}18%{transform:translateX(-50%) translateY(-9px) scale(1.08,.94)}34%{transform:translateX(-50%) translateY(0) scale(.97,1.04)}50%{transform:translateX(-50%) translateY(-4px) scale(1.03,.98)}66%{transform:translateX(-50%) translateY(0) scale(1)}}
     .ev-map-pin-label{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);width:max-content;max-width:220px;padding:5px 8px;overflow:hidden;text-overflow:ellipsis;border:1px solid #dce7e1;border-radius:8px;background:#fffffff5;color:#1b3b2c;font:600 12px/1.35 system-ui,sans-serif;box-shadow:0 2px 8px #153e2814;pointer-events:none;text-align:left}
     .ev-map-label-title{display:block;overflow:hidden;text-overflow:ellipsis}.ev-map-label-context,.ev-map-label-detail{display:none;white-space:normal;font-size:11px;line-height:1.5;font-weight:500}
     .ev-map-pin-label[data-label-level="1"] .ev-map-label-context,.ev-map-pin-label[data-label-level="2"] .ev-map-label-context{display:block;margin-top:4px;color:#346255}
     .ev-map-pin-label[data-label-level="2"] .ev-map-label-detail{display:block;margin-top:4px;padding-top:4px;border-top:1px solid #e3eae8;color:#53655f}
     .ev-map-pin-label:not([data-label-level="0"]){max-width:220px;padding:7px 9px}
-    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected){bottom:0;transform:translate(-50%,50%);width:12px;min-width:12px;height:12px;min-height:12px;padding:0;gap:0;border-radius:50%;box-shadow:none}
-    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected)::after{display:none}
-    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected){width:26px;min-width:26px;height:26px;padding:0;border-radius:50%}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-symbol{display:block}
-    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected) .ev-map-pin-count{display:none}
-    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected){min-width:38px;height:30px}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected):not(.is-ranked){bottom:0;transform:translate(-50%,50%);width:12px;min-width:12px;height:12px;min-height:12px;padding:0;gap:0;border-radius:50%;box-shadow:none}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected):not(.is-ranked)::after{display:none}
+    .ev-map-host[data-marker-scale="dot"] .ev-map-pin:not(.is-selected):not(.is-ranked) .ev-map-pin-count{display:none}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected):not(.is-ranked){width:26px;min-width:26px;height:26px;padding:0;border-radius:50%}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected):not(.is-ranked) .ev-map-pin-symbol{display:block}
+    .ev-map-host[data-marker-scale="pin"] .ev-map-pin:not(.is-selected):not(.is-ranked) .ev-map-pin-count{display:none}
+    .ev-map-host[data-marker-scale="name"] .ev-map-pin:not(.is-selected):not(.is-ranked){min-width:38px;height:30px}
     .ev-map-host[data-marker-scale="dot"] .ev-map-pin-label{max-width:116px;font-size:11px;padding:3px 5px}
     .ev-map-host[data-marker-scale="pin"] .ev-map-pin-label{max-width:140px}
-    .ev-map-host.ev-map-dense .ev-map-pin:not(.is-selected){box-shadow:none}
+    .ev-map-host.ev-map-dense .ev-map-pin:not(.is-selected):not(.is-ranked){box-shadow:none}
     .ev-map-pin.is-selected .ev-map-pin-label{max-width:240px;font-size:14px;font-weight:800;border:2px solid #087f64;background:#effcf6;color:#075842;padding:8px 11px}
     .ev-map-pin-label[hidden]{display:none}.ev-map-current{width:18px;height:18px;border:3px solid white;border-radius:50%;background:#287de0;box-shadow:0 0 0 7px #287de025,0 2px 5px #14366244}
     .ev-map-failure{position:absolute;inset:0;display:grid;place-content:center;gap:10px;padding:24px;text-align:center;color:#324c40;font:500 14px/1.6 system-ui;background:#f2f6f3}
     .ev-map-host .leaflet-control-attribution{max-width:100%;font-size:10px}.ev-map-host .leaflet-control-scale-line{font-size:10px}
     @media(max-width:760px){.ev-map-host{--ev-map-controls-top:64px}.ev-map-pin-label:not([data-label-level="0"]){max-width:200px}}
-    @media(prefers-reduced-motion:reduce){.ev-map-host *{scroll-behavior:auto!important}}
+    @media(prefers-reduced-motion:reduce){.ev-map-host *{scroll-behavior:auto!important}.ev-map-pin.is-ranked{animation:none!important}}
   `;
   document.head.append(style);
 }
@@ -297,8 +311,8 @@ function leafletEngine(L, canvas, { userChange, settled, select, background, til
     getCenter() { const point = map.getCenter(); return { lat: point.lat, lng: point.lng }; },
     getZoom() { return map.getZoom(); },
     setView(point, zoom) { map.stop(); map.setView([point.lat, point.lng], zoom, { animate: false }); },
-    add(model) { const marker = L.marker([model.station.lat, model.station.lng], { icon: icon(model), keyboard: false, bubblingMouseEvents: false, zIndexOffset: model.selected ? 5000 : 0 }).addTo(map); marker.on('click', event => { event.originalEvent?.stopPropagation?.(); select(model.id); }); return marker; },
-    update(marker, model) { marker.setLatLng([model.station.lat, model.station.lng]); marker.setIcon(icon(model)); marker.setZIndexOffset(model.selected ? 5000 : 0); },
+    add(model) { const marker = L.marker([model.station.lat, model.station.lng], { icon: icon(model), keyboard: false, bubblingMouseEvents: false, zIndexOffset: model.selected ? 5000 : model.rank ? 4500 - model.rank : 0 }).addTo(map); marker.on('click', event => { event.originalEvent?.stopPropagation?.(); select(model.id); }); return marker; },
+    update(marker, model) { marker.setLatLng([model.station.lat, model.station.lng]); marker.setIcon(icon(model)); marker.setZIndexOffset(model.selected ? 5000 : model.rank ? 4500 - model.rank : 0); },
     remove(marker) { marker.remove(); },
     addLocation(point) { return L.marker([point.lat, point.lng], { icon: L.divIcon({ html: '<div class="ev-map-current"></div>', className: 'ev-leaflet-icon', iconSize: [18, 18], iconAnchor: [9, 9] }), interactive: false, keyboard: false, zIndexOffset: 6000 }).addTo(map); },
     resize() { map.invalidateSize({ animate: false, pan: false, debounceMoveend: true }); },
@@ -336,8 +350,8 @@ function naverEngine(N, canvas, { userChange, settled, select, background }) {
     getCenter() { const point = map.getCenter(); return { lat: point.lat(), lng: point.lng() }; },
     getZoom() { return map.getZoom(); },
     setView(point, zoom) { map.stop(); map.updateBy(new N.LatLng(point.lat, point.lng), zoom); },
-    add(model) { const marker = new N.Marker({ map, position: new N.LatLng(model.station.lat, model.station.lng), title: `${model.number}. ${model.station.name}`, icon: icon(model), zIndex: model.selected ? 5000 : model.number }); N.Event.addListener(marker, 'click', () => select(model.id)); ownedMarkers.add(marker); return marker; },
-    update(marker, model) { marker.setPosition(new N.LatLng(model.station.lat, model.station.lng)); marker.setIcon(icon(model)); marker.setZIndex(model.selected ? 5000 : model.number); },
+    add(model) { const marker = new N.Marker({ map, position: new N.LatLng(model.station.lat, model.station.lng), title: `${model.number}. ${model.station.name}`, icon: icon(model), zIndex: model.selected ? 5000 : model.rank ? 4500 - model.rank : model.number }); N.Event.addListener(marker, 'click', () => select(model.id)); ownedMarkers.add(marker); return marker; },
+    update(marker, model) { marker.setPosition(new N.LatLng(model.station.lat, model.station.lng)); marker.setIcon(icon(model)); marker.setZIndex(model.selected ? 5000 : model.rank ? 4500 - model.rank : model.number); },
     remove(marker) { N.Event.clearInstanceListeners(marker); marker.setMap(null); ownedMarkers.delete(marker); },
     addLocation(point) { const marker = new N.Marker({ map, position: new N.LatLng(point.lat, point.lng), title: '내 위치', clickable: false, zIndex: 6000, icon: { content: '<div class="ev-map-current"></div>', size: new N.Size(18, 18), anchor: new N.Point(9, 9) } }); ownedMarkers.add(marker); return marker; },
     resize() { map.autoResize(); },
@@ -370,7 +384,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
   let rows = [];
   let selection = null;
   let summaries = new Map();
-  let requestedView = { point: INITIAL_CENTER, zoom: 12 };
+  let requestedView = { point: INITIAL_CENTER, zoom: DEFAULT_BROWSE_ZOOM };
   let locationPoint = null;
   let locationMarker = null;
   let boundsTimer = 0;
@@ -606,7 +620,7 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
       locationPoint = { lat: point.lat, lng: point.lng };
       if (locationMarker && engine) engine.remove(locationMarker);
       locationMarker = engine?.addLocation(locationPoint) || null;
-      return api.setCenter(locationPoint, 15);
+      return api.setCenter(locationPoint, DEFAULT_BROWSE_ZOOM);
     },
     resize() {
       if (destroyed || !engine || !canvas.clientWidth || !canvas.clientHeight) return;
