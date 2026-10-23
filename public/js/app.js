@@ -1,4 +1,4 @@
-import { createMap, parseSharedView } from './map.js';
+import { createMap, parseSharedView, DEFAULT_BROWSE_ZOOM } from './map.js';
 import { revealSelectedCard, bindListScrollSelection } from './selection.js';
 import { createAdManager } from './ads.js';
 import { mountListAds } from './ad-list.js';
@@ -845,13 +845,13 @@ async function initializeMap() {
     const selected = currentStation();
     if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
     else if (sharedView) map.setCenter(sharedView.center, sharedView.zoom);
-    else if (demo) map.setCenter({ lat: 37.5658, lng: 126.979 }, 14);
+    else if (demo) map.setCenter({ lat: 37.5658, lng: 126.979 }, DEFAULT_BROWSE_ZOOM);
     else if (initialLocation) map.locate(initialLocation);
-    else if (!selected && !sharedView && !demo) map.setCenter(state.center, 14);
+    else if (!selected && !sharedView && !demo) map.setCenter(state.center, DEFAULT_BROWSE_ZOOM);
     // Some SDKs report the previous (Seoul) bounds while moving to a newly
     // acquired user position. Never use those bounds for the first data load.
     const requestedCenter = initialLocation || sharedView?.center || map.getCenter() || state.center;
-    appliedBounds = initialVisibleBounds(requestedCenter, map.getBounds(), initialLocation ? 15 : map.getZoom());
+    appliedBounds = initialVisibleBounds(requestedCenter, map.getBounds(), initialLocation ? DEFAULT_BROWSE_ZOOM : map.getZoom());
     state.bounds = appliedBounds;
     state.center = requestedCenter;
     mapSearchPending = false;
