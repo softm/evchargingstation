@@ -218,7 +218,7 @@ jobs:
           path: verification/ads
           retention-days: 7
       - name: Verify zoom-dependent markers and station selection
-        if: github.event_name != 'schedule'
+        if: always() && github.event_name != 'schedule' && steps.deployment.conclusion == 'success'
         env:
           DEPLOYMENT_URL: ${{ steps.deployment.outputs.page_url }}
         run: node scripts/verify-markers-browser.mjs
@@ -230,7 +230,7 @@ jobs:
           path: verification/markers
           retention-days: 7
       - name: Verify mobile map focus mode
-        if: github.event_name != 'schedule'
+        if: always() && github.event_name != 'schedule' && steps.deployment.conclusion == 'success'
         env:
           DEPLOYMENT_URL: ${{ steps.deployment.outputs.page_url }}
         run: node scripts/verify-map-focus-browser.mjs
