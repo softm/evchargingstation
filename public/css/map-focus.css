@@ -42,13 +42,13 @@
   body.map-focus-enabled [data-map-focus-state="list-sheet"] .results,
   body.map-focus-enabled [data-map-focus-state="list-sheet-expanded"] .results{
     display:flex!important;position:absolute;z-index:920;left:0;right:0;bottom:0;
-    height:46dvh;max-height:calc(100dvh - 86px);min-height:260px;
+    height:var(--focus-sheet-height,46dvh);max-height:calc(100dvh - 86px);min-height:260px;
     padding:0 0 env(safe-area-inset-bottom);border:1px solid #dfe8e2;border-bottom:0;
     border-radius:22px 22px 0 0;background:#fff;box-shadow:0 -15px 52px #173f3030;
     overflow:hidden;pointer-events:auto;transform:translateY(var(--focus-drag-y,0));
     transition:height .22s ease,transform .18s ease
   }
-  body.map-focus-enabled [data-map-focus-state="list-sheet-expanded"] .results{height:80dvh}
+  body.map-focus-enabled [data-map-focus-state="list-sheet-expanded"] .results{height:var(--focus-sheet-height,80dvh)}
   body.map-focus-enabled [data-map-focus-state="list-sheet"] .results,
   body.map-focus-enabled [data-map-focus-state="list-sheet-expanded"] .results{
     bottom:var(--ev-ad-space,0px);max-height:calc(100dvh - 86px - var(--ev-ad-space,0px))
@@ -156,13 +156,13 @@
   }
 
   body.map-focus-enabled .station-dialog[open]{
-    z-index:930;inset:auto 0 0 0!important;width:100%;max-width:100%;height:56dvh;max-height:82dvh;
+    z-index:930;inset:auto 0 0 0!important;width:100%;max-width:100%;height:var(--focus-sheet-height,56dvh);max-height:82dvh;
     margin:0;padding:0 0 env(safe-area-inset-bottom);border:1px solid #dce6df;border-bottom:0;
     border-radius:22px 22px 0 0;background:#fff;box-shadow:0 -18px 58px #173f3038;
     overflow:auto;overscroll-behavior:contain;transform:translateY(var(--focus-drag-y,0));
     transition:height .22s ease,transform .18s ease
   }
-  body.map-focus-enabled [data-map-focus-state="expanded-tools"] .station-dialog[open]{height:78dvh}
+  body.map-focus-enabled [data-map-focus-state="expanded-tools"] .station-dialog[open]{height:var(--focus-sheet-height,78dvh)}
   body.map-focus-enabled .station-dialog.is-dragging{transition:none!important}
   body.map-focus-enabled .station-dialog::before{display:none!important}
   body.map-focus-enabled .focus-sheet-handle{
@@ -199,8 +199,8 @@
 }
 
 @media(max-width:760px) and (max-height:560px){
-  body.map-focus-enabled [data-map-focus-state="focus-detail"] .station-dialog[open]{height:48dvh}
-  body.map-focus-enabled [data-map-focus-state="expanded-tools"] .station-dialog[open]{height:78dvh}
+  body.map-focus-enabled [data-map-focus-state="focus-detail"] .station-dialog[open]{height:var(--focus-sheet-height,48dvh)}
+  body.map-focus-enabled [data-map-focus-state="expanded-tools"] .station-dialog[open]{height:var(--focus-sheet-height,78dvh)}
   body.map-focus-enabled .search-panel .select-row{display:none}
   body.map-focus-enabled [data-map-focus-state="map-browse"] .map-topbar,
   body.map-focus-enabled [data-map-focus-state="expanded-tools"] .map-topbar,
