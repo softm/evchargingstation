@@ -3,7 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildMarkerModels, compareMarkerLabels, containsCoordinate, createViewportGate, isCoordinate, labelBudget, markerDetailLevel, markerHtml, markerScale, normalizeBounds, parseSharedView, planMarkerLabels, selectMarkerModels } from '../public/js/map.js';
+import { DEFAULT_BROWSE_ZOOM, buildMarkerModels, compareMarkerLabels, containsCoordinate, createViewportGate, isCoordinate, labelBudget, markerDetailLevel, markerHtml, markerScale, normalizeBounds, parseSharedView, planMarkerLabels, selectMarkerModels } from '../public/js/map.js';
+
+test('기본 지도 탐색 배율은 모바일 근거리 충전소가 한눈에 보이는 15를 사용한다', () => {
+  assert.equal(DEFAULT_BROWSE_ZOOM, 15);
+});
 
 test('좌표 미제공·빈 문자열·NaN을 실제 0도 위치로 바꾸지 않는다', () => {
   for (const point of [null, {}, { lat: null, lng: null }, { lat: '', lng: '' }, { lat: '37.5', lng: '127' }, { lat: NaN, lng: 127 }, { lat: 91, lng: 127 }, { lat: 0, lng: 0 }]) assert.equal(isCoordinate(point), false);
@@ -26,6 +30,15 @@ test('좌표가 없는 목록 항목을 지도에서 제외해도 마커 번호�
   assert.equal(models[0].tone, 'available');
   assert.equal(models[1].tone, 'unknown');
   assert.equal(models[1].count, '—');
+});
+
+test('정렬 결과 상위 5개 마커만 순위 강조 대상으로 지정한다', () => {
+  const stations = Array.from({ length: 7 }, (_, index) => ({ id: `R${index + 1}`, name: `${index + 1}번`, lat: 37.5 + index * .001, lng: 127 }));
+  const models = buildMarkerModels(stations);
+  assert.deepEqual(models.map(model => model.rank), [1, 2, 3, 4, 5, null, null]);
+  assert.match(markerHtml(models[0]), /ev-map-pin--rank-1/);
+  assert.match(markerHtml(models[4]), />5위</);
+  assert.equal(markerHtml(models[5]).includes('is-ranked'), false);
 });
 
 test('잘못된 상태 집계를 충전 가능 마커로 표시하지 않고 중복 ID를 한 번만 그린다', () => {
