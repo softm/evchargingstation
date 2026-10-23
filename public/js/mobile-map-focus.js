@@ -32,6 +32,7 @@ export function createMobileMapFocus({
   onMapTypeState = () => ({ supported: false, type: 'normal' }),
   onToggleMapType = () => false,
   onFavorites = () => {},
+  onStateChange = () => {},
   onCloseDetail = () => {}
 } = {}) {
   if (!root || !dialog || !results) return null;
@@ -132,6 +133,7 @@ export function createMobileMapFocus({
     }
     updateCounts();
     syncMapType();
+    onStateChange(state);
     scheduleMapLayout(refocus);
   }
 
