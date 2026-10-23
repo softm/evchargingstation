@@ -37,6 +37,7 @@ export function createMobileMapFocus({
   if (!root || !dialog || !results) return null;
   const media = window.matchMedia('(max-width:760px)');
   let state = media.matches ? 'map-browse' : 'default';
+  let lastMapState = 'map-browse';
   let historyOverlay = false;
   let drag = null;
   const cleanups = [];
@@ -116,6 +117,7 @@ export function createMobileMapFocus({
   function apply(next, { refocus = true } = {}) {
     if (!MAP_FOCUS_STATES.includes(next)) next = 'map-browse';
     state = next;
+    if (state === 'map-browse' || state === 'map-collapsed') lastMapState = state;
     document.body.classList.toggle('map-focus-enabled', isActive());
     root.dataset.mapFocusState = state;
     document.body.dataset.mapFocusState = state;
@@ -163,14 +165,14 @@ export function createMobileMapFocus({
       return false;
     }
     historyOverlay = false;
-    apply('map-browse', { refocus: false });
+    apply(lastMapState, { refocus: false });
     return true;
   }
 
   function openList(expanded = false) {
     if (!isActive()) return;
     if (!listState(state)) pushOverlayHistory();
-    apply(expanded ? 'list-sheet-expanded' : 'list-sheet', { refocus: false });
+    apply(expanded ? 'list-sheet-expanded' : 'list-sheet', { refocus: true });
     results.querySelector('.list-content')?.focus?.({ preventScroll: true });
   }
 
@@ -312,8 +314,10 @@ export function createMobileMapFocus({
 
   const key = event => {
     if (event.key !== 'Escape' || !isActive()) return;
-    if (detailState(state) && dialog.open) { event.preventDefault(); onCloseDetail?.(); }
-    else if (listState(state)) { event.preventDefault(); closeList(); }
+    if (state === 'expanded-tools' && dialog.open) { event.preventDefault(); apply('focus-detail'); }
+    else if (state === 'focus-detail' && dialog.open) { event.preventDefault(); onCloseDetail?.(); }
+    else if (state === 'list-sheet-expanded') { event.preventDefault(); apply('list-sheet', { refocus: true }); }
+    else if (state === 'list-sheet') { event.preventDefault(); closeList(); }
   };
   window.addEventListener('keydown', key);
   cleanups.push(() => window.removeEventListener('keydown', key));
