@@ -70,6 +70,12 @@ try{
       const expandedHeight=await page.locator('#stationDialog').evaluate(node=>node.getBoundingClientRect().height);
       assert.ok(expandedHeight>compact.sheetHeight+80,'expanded detail sheet must grow');
 
+      await page.keyboard.press('Escape');
+      await state(page,'focus-detail');
+      assert.equal(await page.locator('#stationDialog').evaluate(node=>node.open),true,'first Escape only collapses expanded detail');
+
+      await page.locator('.focus-detail-expand').click();
+      await state(page,'expanded-tools');
       await page.locator('.focus-detail-expand').click();
       await state(page,'focus-detail');
       await drag(page,'#stationDialog > .focus-sheet-handle',-90);
@@ -118,6 +124,15 @@ try{
       await state(page,'map-collapsed');
       assert.equal(await page.locator('.search-panel').isVisible(),false);
       assert.equal(await page.locator('.map-focus-expand-fab').isVisible(),true);
+
+      await page.locator('.ev-map-pin.is-selected').click();
+      await page.locator('#stationDialog[open]').waitFor();
+      await state(page,'focus-detail');
+      await page.locator('#stationDialog [data-action="close"]').click();
+      await state(page,'map-collapsed');
+      await page.waitForFunction(()=>!document.querySelector('#stationDialog')?.open);
+      assert.equal(await page.locator('.map-focus-expand-fab').isVisible(),true,'detail close restores the prior collapsed map state');
+
       await page.locator('.map-focus-expand-fab').click();
       await state(page,'map-browse');
 
