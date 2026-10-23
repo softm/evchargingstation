@@ -14,6 +14,12 @@ export function resolveSheetGesture(state, deltaY) {
   return state;
 }
 
+export function resolveSheetHeight(startHeight, deltaY, minHeight, maxHeight) {
+  const start = Number(startHeight), delta = Number(deltaY), min = Number(minHeight), max = Number(maxHeight);
+  if (![start, delta, min, max].every(Number.isFinite) || min > max) return startHeight;
+  return Math.max(min, Math.min(max, start - delta));
+}
+
 const detailState = state => state === 'focus-detail' || state === 'expanded-tools';
 const listState = state => state === 'list-sheet' || state === 'list-sheet-expanded';
 
@@ -188,34 +194,57 @@ export function createMobileMapFocus({
     apply('map-browse', { refocus: false });
   }
 
-  function setSheetOffset(target, value) {
-    target?.style?.setProperty('--focus-drag-y', `${Math.max(-120, Math.min(180, value))}px`);
+  function sheetLimits(kind) {
+    const viewport = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 640;
+    const min = kind === 'detail' ? Math.max(260, viewport * .42) : Math.max(260, viewport * .38);
+    const max = kind === 'detail' ? viewport * .82 : viewport * .80;
+    return { min, max: Math.max(min, max) };
+  }
+
+  function setSheetHeight(target, startHeight, deltaY, kind) {
+    if (!target?.style) return;
+    const { min, max } = sheetLimits(kind);
+    const height = resolveSheetHeight(startHeight, deltaY, min, max);
+    if (Number.isFinite(height)) target.style.setProperty('--focus-sheet-height', `${Math.round(height)}px`);
   }
 
   function bindHandle(handle, target, kind) {
     if (!handle) return;
     const down = event => {
       if (!isActive() || event.button > 0) return;
-      drag = { pointerId: event.pointerId, y: event.clientY, target, kind, state };
+      const rect = target.getBoundingClientRect();
+      drag = { pointerId: event.pointerId, y: event.clientY, target, kind, state, startHeight: rect.height, lastY: event.clientY };
       handle.setPointerCapture?.(event.pointerId);
       target.classList.add('is-dragging');
       event.preventDefault();
     };
     const move = event => {
       if (!drag || drag.pointerId !== event.pointerId) return;
-      setSheetOffset(target, event.clientY - drag.y);
+      drag.lastY = event.clientY;
+      setSheetHeight(target, drag.startHeight, event.clientY - drag.y, drag.kind);
+      scheduleMapLayout(false);
       event.preventDefault();
     };
     const end = event => {
       if (!drag || drag.pointerId !== event.pointerId) return;
       const current = drag;
       drag = null;
-      target.classList.remove('is-dragging');
-      target.style.removeProperty('--focus-drag-y');
-      const next = resolveSheetGesture(current.state, event.clientY - current.y);
-      if (current.kind === 'detail' && next === 'map-browse') onCloseDetail?.();
-      else if (current.kind === 'list' && next === 'map-browse') closeList();
-      else apply(next);
+      const endY = Number.isFinite(event.clientY) && event.type !== 'pointercancel' ? event.clientY : current.lastY;
+      const next = resolveSheetGesture(current.state, endY - current.y);
+      if (current.kind === 'detail' && next === 'map-browse') {
+        target.style.removeProperty('--focus-sheet-height');
+        target.classList.remove('is-dragging');
+        onCloseDetail?.();
+      } else if (current.kind === 'list' && next === 'map-browse') {
+        target.style.removeProperty('--focus-sheet-height');
+        target.classList.remove('is-dragging');
+        closeList();
+      } else {
+        apply(next);
+        target.style.removeProperty('--focus-sheet-height');
+        target.classList.remove('is-dragging');
+        scheduleMapLayout(detailState(next));
+      }
     };
     handle.addEventListener('pointerdown', down);
     handle.addEventListener('pointermove', move);
