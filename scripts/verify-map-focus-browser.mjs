@@ -94,7 +94,7 @@ try{
 
       await page.locator('#stationDialog [data-action="close"]').click();
       await state(page,'map-browse');
-      await page.locator('#stationDialog:not([open])').waitFor();
+      await page.waitForFunction(()=>!document.querySelector('#stationDialog')?.open);
       assert.equal(await page.locator(`.ev-map-pin.is-selected[data-station-id=${JSON.stringify(target)}]`).count(),1,'closing detail must retain selected marker');
 
       await page.locator('[data-focus-action="list"]').click();
@@ -112,7 +112,7 @@ try{
       await state(page,'focus-detail');
       await page.keyboard.press('Escape');
       await state(page,'map-browse');
-      await page.locator('#stationDialog:not([open])').waitFor();
+      await page.waitForFunction(()=>!document.querySelector('#stationDialog')?.open);
 
       await page.locator('.map-focus-dock [data-focus-action="collapse"]').click();
       await state(page,'map-collapsed');
