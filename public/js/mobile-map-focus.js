@@ -118,6 +118,7 @@ export function createMobileMapFocus({
     state = next;
     document.body.classList.toggle('map-focus-enabled', isActive());
     root.dataset.mapFocusState = state;
+    document.body.dataset.mapFocusState = state;
     advanced.querySelector('[data-focus-action="collapse"]')?.setAttribute('aria-pressed', String(state === 'map-collapsed'));
     const expand = dialog.querySelector('[data-focus-expand]');
     if (expand) {
@@ -292,6 +293,7 @@ export function createMobileMapFocus({
     if (isActive()) apply(state === 'default' ? 'map-browse' : state, { refocus: false });
     else {
       root.removeAttribute('data-map-focus-state');
+      document.body.removeAttribute('data-map-focus-state');
       document.body.classList.remove('map-focus-enabled');
     }
   };
@@ -310,7 +312,8 @@ export function createMobileMapFocus({
 
   const key = event => {
     if (event.key !== 'Escape' || !isActive()) return;
-    if (listState(state)) { event.preventDefault(); closeList(); }
+    if (detailState(state) && dialog.open) { event.preventDefault(); onCloseDetail?.(); }
+    else if (listState(state)) { event.preventDefault(); closeList(); }
   };
   window.addEventListener('keydown', key);
   cleanups.push(() => window.removeEventListener('keydown', key));
@@ -340,6 +343,7 @@ export function createMobileMapFocus({
       dock.remove();
       listHandle.remove();
       document.body.classList.remove('map-focus-enabled');
+      document.body.removeAttribute('data-map-focus-state');
       root.removeAttribute('data-map-focus-state');
     }
   };
