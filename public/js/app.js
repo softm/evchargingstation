@@ -27,8 +27,15 @@ const listAds = mountListAds({root:$('listContent'),manager:adManager});
 const bottomAd = mountBottomAd({host:$('bottomAd'),manager:adManager,onSpaceChange:()=>requestAnimationFrame(()=>map?.resize())});
 const welcomeAd = mountWelcome({dialog:$('welcomeAdDialog'),manager:adManager,onChange:syncAds});
 function syncAds() {
+  const mobile = window.matchMedia('(max-width:760px)').matches;
+  const focusState = document.body.dataset.mapFocusState || '';
+  const focusList = focusState === 'list-sheet' || focusState === 'list-sheet-expanded';
+  const focusCollapsed = focusState === 'map-collapsed';
   adManager.setBlocked($('welcomeAdDialog').open || $('filterDialog').open || $('stationDialog').open);
-  bottomAd.setContext({isList:!window.matchMedia('(max-width:760px)').matches || !$('appLayout').classList.contains('mobile-map'),detailOpen:$('stationDialog').open || $('filterDialog').open || $('welcomeAdDialog').open});
+  bottomAd.setContext({
+    isList: !mobile || !$('appLayout').classList.contains('mobile-map') || focusList,
+    detailOpen: $('stationDialog').open || $('filterDialog').open || $('welcomeAdDialog').open || focusCollapsed
+  });
   listAds.sync();
 }
 const favoriteKey = demo ? 'evchargingstation:demo-favorites:v1' : 'evchargingstation:favorites:v1';
@@ -62,6 +69,7 @@ mobileFocus = createMobileMapFocus({
   onMapTypeState: () => ({ supported: Boolean(map?.supportsMapType?.()), type: map?.getMapType?.() || 'normal' }),
   onToggleMapType: () => map?.toggleMapType?.(),
   onFavorites: () => $('favoriteToggle')?.click(),
+  onStateChange: () => syncAds(),
   onCloseDetail: options => closeDetails(options)
 });
 
