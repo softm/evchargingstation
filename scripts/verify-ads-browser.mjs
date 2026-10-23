@@ -20,7 +20,10 @@ try {
    await page.locator('#welcomeAdDialog[open]').waitFor();
    await page.screenshot({path:resolve(out,`welcome-${name}.png`)});
    await page.keyboard.press('Escape');await page.locator('#welcomeAdDialog').waitFor({state:'hidden'});
-   if(viewport.width<761)await page.getByRole('button',{name:'목록',exact:true}).click();
+   if(viewport.width<761){
+    await page.locator('[data-focus-action="list"]').click();
+    await page.waitForFunction(()=>document.querySelector('#appLayout')?.dataset.mapFocusState==='list-sheet');
+   }
    assert.equal(await page.locator('.station-card').count(),60);
    assert.equal(await page.locator('.adfit-banner[data-after-station]').count(),3);
    const placement=await page.locator('.adfit-banner[data-after-station]').evaluateAll(slots=>slots.map(s=>({position:Number(s.dataset.afterStation),width:s.getBoundingClientRect().width,hidden:s.hidden})));
@@ -29,8 +32,12 @@ try {
    assert.ok(placement.every(s=>s.hidden||s.width>=320),'never crop a creative on narrow screens');
    if(viewport.width<761){assert.equal(await page.locator('#bottomAdPanel').isVisible(),false);await page.getByRole('button',{name:'광고 펼치기',exact:true}).click();}
    assert.equal(await page.locator('#bottomAdPanel').isVisible(),true);
-   const geometry=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth,app:document.querySelector('#appLayout').getBoundingClientRect().bottom,ad:document.querySelector('#bottomAd').getBoundingClientRect().top}));
-   assert.equal(geometry.overflow,false);assert.ok(geometry.app<=geometry.ad+1,'reserved ad space prevents overlap');
+   const geometry=await page.evaluate(mobile=>{
+    const ad=document.querySelector('#bottomAd').getBoundingClientRect();
+    const content=(mobile?document.querySelector('#results'):document.querySelector('#appLayout')).getBoundingClientRect();
+    return {overflow:document.documentElement.scrollWidth>innerWidth,contentBottom:content.bottom,adTop:ad.top};
+   },viewport.width<761);
+   assert.equal(geometry.overflow,false);assert.ok(geometry.contentBottom<=geometry.adTop+1,'reserved ad space prevents overlap');
    await page.screenshot({path:resolve(out,`ads-${name}.png`)});
    const list=page.locator('#listContent'),rect=await list.boundingBox();
    await page.mouse.move(rect.x+rect.width/2,rect.y+Math.min(120,rect.height/2));await page.mouse.wheel(0,650);
@@ -38,16 +45,19 @@ try {
    assert.equal(await page.locator('#bottomAdPanel').isVisible(),false,'reading temporarily collapses bottom');
    await page.screenshot({path:resolve(out,`ads-inline-${name}.png`)});
    const selected=await page.locator('.station-card.selected').getAttribute('data-station-id');
-   if(viewport.width<761)await page.getByRole('button',{name:'지도',exact:true}).click();
+   if(viewport.width<761){
+    await page.locator('.list-sheet-close').click();
+    await page.waitForFunction(()=>document.querySelector('#appLayout')?.dataset.mapFocusState==='map-browse');
+   }
    await page.locator('.ev-map-pin.is-selected').click();
    await page.locator('#stationDialog[open]').waitFor();
    assert.equal(await page.locator('.station-card.selected').getAttribute('data-station-id'),selected);
    assert.equal(await page.locator('.ev-map-pin.is-selected').getAttribute('data-station-id'),selected);
    if(viewport.width<761)assert.equal(await page.locator('#bottomAd').isVisible(),false,'mobile detail owns its space');
    await page.getByRole('button',{name:'충전소 상세 닫기',exact:true}).click();
-   if(viewport.width<761)await page.getByRole('button',{name:'목록',exact:true}).click();
-   // Mobile map navigation ends the temporary reading collapse and restores the
-   // user's expanded choice. Desktop stays in the list and remains collapsed.
+   if(viewport.width<761)await page.waitForFunction(()=>document.querySelector('#appLayout')?.dataset.mapFocusState==='map-browse');
+   // Mobile detail close returns to map-browse and restores the explicit ad choice.
+   // Desktop remains in its reading context and stays collapsed.
    assert.equal(await page.locator('#bottomAdPanel').isVisible(),viewport.width<761,'navigation preserves the explicit bottom-ad choice');
    if(viewport.width>=761)await page.getByRole('button',{name:'광고 펼치기',exact:true}).click();
    await page.getByRole('button',{name:'광고 접기',exact:true}).click();
@@ -60,11 +70,17 @@ try {
    // New non-preview session: no unit configured means no SDK/script/ins or ad space.
    await page.goto(`${base}?region=11&sort=name`,{waitUntil:'domcontentloaded'});await page.locator('.station-card').first().waitFor({state:'attached',timeout:90000});
    assert.equal(await page.locator('ins.kakao_ad_area').count(),0);assert.equal(await page.locator('#bottomAd').isVisible(),false);
-   if(viewport.width<761)await page.getByRole('button',{name:'목록',exact:true}).click();
+   if(viewport.width<761){
+    await page.locator('[data-focus-action="list"]').click();
+    await page.waitForFunction(()=>document.querySelector('#appLayout')?.dataset.mapFocusState==='list-sheet');
+   }
    await page.getByRole('button',{name:/충전소 더 보기/}).click();
    await page.waitForFunction(()=>document.querySelectorAll('.station-card').length===120);
    assert.equal(await page.locator('.adfit-banner[data-after-station]').count(),3,'more results keep the same three placements');
-   if(viewport.width<761)await page.getByRole('button',{name:'지도',exact:true}).click();
+   if(viewport.width<761){
+    await page.locator('.list-sheet-close').click();
+    await page.waitForFunction(()=>document.querySelector('#appLayout')?.dataset.mapFocusState==='map-browse');
+   }
    await page.getByRole('button',{name:'지도 확대',exact:true}).click();
    await page.getByRole('button',{name:'지도 축소',exact:true}).click();
    const mapBox=await page.locator('#map').boundingBox();
