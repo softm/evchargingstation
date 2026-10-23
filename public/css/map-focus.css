@@ -49,6 +49,10 @@
     transition:height .22s ease,transform .18s ease
   }
   body.map-focus-enabled [data-map-focus-state="list-sheet-expanded"] .results{height:80dvh}
+  body.map-focus-enabled [data-map-focus-state="list-sheet"] .results,
+  body.map-focus-enabled [data-map-focus-state="list-sheet-expanded"] .results{
+    bottom:var(--ev-ad-space,0px);max-height:calc(100dvh - 86px - var(--ev-ad-space,0px))
+  }
   body.map-focus-enabled .results.is-dragging{transition:none!important}
   body.map-focus-enabled .list-sheet-grip{
     display:flex;position:relative;align-items:center;justify-content:center;min-height:28px;flex:none;
@@ -123,6 +127,7 @@
   body.map-focus-enabled .map-focus-dock{
     display:flex;position:absolute;z-index:830;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));
     transform:translateX(-50%);min-width:min(330px,calc(100vw - 20px));height:58px;
+    bottom:calc(10px + env(safe-area-inset-bottom) + var(--ev-ad-space,0px));
     padding:5px;border:1px solid #dfe7e2;border-radius:18px;background:#fffffff7;
     box-shadow:0 9px 30px #173f3030;pointer-events:auto
   }
@@ -140,7 +145,8 @@
   body.map-focus-enabled .map-legend,
   body.map-focus-enabled .power-legend{display:none!important}
   body.map-focus-enabled .map-message{bottom:82px;left:10px;right:10px}
-  body.map-focus-enabled .map-search-area{z-index:835;bottom:80px}
+  body.map-focus-enabled .map-search-area{z-index:835;bottom:calc(80px + var(--ev-ad-space,0px))}
+  body.map-focus-enabled .ad-bottom{z-index:950}
   body.map-focus-enabled [data-map-focus-state="focus-detail"] .map-search-area,
   body.map-focus-enabled [data-map-focus-state="expanded-tools"] .map-search-area{
     bottom:calc(44dvh + 14px + env(safe-area-inset-bottom))
