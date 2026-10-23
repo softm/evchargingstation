@@ -559,6 +559,15 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
     target.addEventListener(name, handler, options);
     cleanups.push(() => target.removeEventListener(name, handler, options));
   }
+  listen(host, 'click', event => {
+    const label = event.target.closest?.('.ev-map-pin-label');
+    if (!label) return;
+    const pin = label.closest('.ev-map-pin[data-station-id]');
+    if (!pin) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onSelect(pin.dataset.stationId);
+  }, true);
   listen(canvas, 'wheel', userChange, { capture: true, passive: true });
   listen(canvas, 'touchstart', event => { if (event.touches.length > 1) userChange(); }, { capture: true, passive: true });
   listen(canvas, 'dblclick', event => { if (!event.target.closest('.ev-map-pin')) userChange(); }, true);
