@@ -290,6 +290,9 @@ function leafletEngine(L, canvas, { userChange, settled, select, background, til
   const icon = model => L.divIcon({ html: markerHtml(model), className: 'ev-leaflet-icon', iconSize: [64, 44], iconAnchor: [32, 44] });
   return {
     provider: 'leaflet',
+    supportsMapType() { return false; },
+    getMapType() { return 'normal'; },
+    toggleMapType() { return false; },
     getBounds() { const box = map.getBounds(); return normalizeBounds({ south: box.getSouth(), north: box.getNorth(), west: box.getWest(), east: box.getEast() }); },
     getCenter() { const point = map.getCenter(); return { lat: point.lat, lng: point.lng }; },
     getZoom() { return map.getZoom(); },
@@ -316,6 +319,19 @@ function naverEngine(N, canvas, { userChange, settled, select, background }) {
   const icon = model => ({ content: markerHtml(model), size: new N.Size(64, 44), anchor: new N.Point(32, 44) });
   return {
     provider: 'naver',
+    supportsMapType() { return Boolean(N.MapTypeId?.NORMAL && (N.MapTypeId?.HYBRID || N.MapTypeId?.SATELLITE)); },
+    getMapType() {
+      const current = map.getMapTypeId?.();
+      return current === N.MapTypeId?.HYBRID || current === N.MapTypeId?.SATELLITE ? 'satellite' : 'normal';
+    },
+    toggleMapType() {
+      const normal = N.MapTypeId?.NORMAL;
+      const satellite = N.MapTypeId?.HYBRID || N.MapTypeId?.SATELLITE;
+      if (!normal || !satellite || !map.setMapTypeId) return false;
+      const next = map.getMapTypeId?.() === normal ? satellite : normal;
+      map.setMapTypeId(next);
+      return next === normal ? 'normal' : 'satellite';
+    },
     getBounds() { const box = map.getBounds(); const sw = box.getSW(); const ne = box.getNE(); return normalizeBounds({ south: sw.lat(), north: ne.lat(), west: sw.lng(), east: ne.lng() }); },
     getCenter() { const point = map.getCenter(); return { lat: point.lat(), lng: point.lng() }; },
     getZoom() { return map.getZoom(); },
@@ -569,6 +585,14 @@ export async function createMap({ container, config = {}, onSelect = () => {}, o
     getBounds() { return engine?.getBounds() || null; },
     getCenter() { return engine?.getCenter() || { ...requestedView.point }; },
     getZoom() { return engine?.getZoom() ?? requestedView.zoom; }, // SOFTM-EV-SHARE-ZOOM 날짜:20261019 : 공유 링크가 현재 지도 배율을 그대로 복원하도록 공개 인터페이스에 전달
+    getProvider() { return engine?.provider || null; },
+    supportsMapType() { return Boolean(engine?.supportsMapType?.()); },
+    getMapType() { return engine?.getMapType?.() || 'normal'; },
+    toggleMapType() {
+      const type = engine?.toggleMapType?.();
+      if (type) { queueLabels(); settled(); }
+      return type || false;
+    },
     setCenter(point, zoom) {
       if (!isCoordinate(point) || destroyed) return false;
       userChange('programmatic');
