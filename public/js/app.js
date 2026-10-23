@@ -605,6 +605,9 @@ async function selectStation(id, { preserveView = false, origin = 'list' } = {})
     const sameOpen = $('stationDialog').open && state.selectedId === id && state.detail?.station.id === id;
     state.selectedId = id;
     render();
+    if (hasCoordinates(station) && !preserveView) {
+      map?.focus(station, { zoom: origin === 'scroll' ? map?.getZoom?.() || 14 : Math.max(16, map?.getZoom?.() || 16) });
+    }
     if (!sameOpen) {
       $('detailContent').dataset.stationId = '';
       $('detailContent').innerHTML = `<div class="detail-toolbar"><h2 id="detailTitle">${esc(station.name)}</h2><button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button></div><div class="loading-state"><span class="loader"></span><p>충전소 상세 정보를 불러오고 있습니다</p></div>`;
