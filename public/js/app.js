@@ -10,6 +10,7 @@ import { DEFAULT_FILTERS, SPEEDS, chargerState, chargerSpeed, operatorKey, isOpe
 import { compareStations, nearbyAlternatives, estimateChargingCost } from './discovery.js';
 import { facilityName, facilityDetailName } from './fees.js';
 import { stationFloors, statusSummaryHTML, chargerRowsHTML, chargingHelpHTML, tariffGuideHTML } from './station-details.js';
+import { createMobileMapFocus } from './mobile-map-focus.js';
 
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -45,6 +46,24 @@ let mapSearchPending = false;
 let selectedListFrame = 0;
 let selectionOrigin = 'list';
 let listScrollSelection;
+let mobileFocus = null;
+
+mobileFocus = createMobileMapFocus({
+  root: $('appLayout'),
+  dialog: $('stationDialog'),
+  results: $('results'),
+  resultCount: $('resultCount'),
+  favoriteCount: $('favoriteCount'),
+  onResize: () => map?.resize(),
+  onRefocus: () => {
+    const station = currentStation();
+    if (station && hasCoordinates(station)) map?.focus(station, { zoom: map?.getZoom?.() || 16 });
+  },
+  onMapTypeState: () => ({ supported: Boolean(map?.supportsMapType?.()), type: map?.getMapType?.() || 'normal' }),
+  onToggleMapType: () => map?.toggleMapType?.(),
+  onFavorites: () => $('favoriteToggle')?.click(),
+  onCloseDetail: options => closeDetails(options)
+});
 
 function cancelSelectedListReveal() {
   cancelAnimationFrame(selectedListFrame);
@@ -591,6 +610,11 @@ async function selectStation(id, { preserveView = false, origin = 'list' } = {})
       $('detailContent').innerHTML = `<div class="detail-toolbar"><h2 id="detailTitle">${esc(station.name)}</h2><button class="icon-button close-detail" type="button" data-action="close" aria-label="충전소 상세 닫기">${icon('close')}</button></div><div class="loading-state"><span class="loader"></span><p>충전소 상세 정보를 불러오고 있습니다</p></div>`;
       if (!$('stationDialog').open) $('stationDialog').show();
       syncAds();
+      if (mobileFocus?.isActive()) {
+        $('appLayout').classList.add('mobile-map');
+        mobileFocus.openDetail();
+        mobileFocus.decorateDetail();
+      }
       $('stationDialog').scrollTop = 0;
     }
     try {
@@ -619,17 +643,29 @@ async function selectStation(id, { preserveView = false, origin = 'list' } = {})
   // Nonmodal panel preserves an interactive, unblurred map and list.
   if (!$('stationDialog').open) $('stationDialog').show();
   syncAds();
+  if (mobileFocus?.isActive()) {
+    $('appLayout').classList.add('mobile-map');
+    mobileFocus.openDetail();
+    mobileFocus.decorateDetail();
+  }
   queueSelectedListReveal(id);
   void refreshSelectedStatus();
 }
 
-function closeDetails() {
+function closeDetails({ fromHistory = false } = {}) {
+  if (mobileFocus?.isActive() && !fromHistory && mobileFocus.requestHistoryClose()) return;
   state.detailEpoch++;
   state.detail = null;
   cancelSelectedListReveal();
-  $('stationDialog').close();
+  if ($('stationDialog').open) $('stationDialog').close();
   syncAds();
   document.body.append($('toast'));
+  if (mobileFocus?.isActive()) {
+    preserveSelectedView = true;
+    mobileFocus.afterDetailClosed({ fromHistory: true });
+    map?.setStations(state.visible, { selectedId: state.selectedId, summaries: state.summaries });
+    return;
+  }
   state.selectedId = null;
   preserveSelectedView = false;
   map?.setStations(state.visible, { selectedId: null, summaries: state.summaries });
@@ -737,6 +773,7 @@ function renderDetails(station) {
     dialog.scrollTop = sameStation ? scrollTop : 0;
   }
   updateCost();
+  mobileFocus?.decorateDetail();
 }
 
 async function copyText(text, success = '복사했습니다.') {
@@ -770,6 +807,19 @@ async function shareStation(station) {
 }
 
 function setMobileView(view) {
+  const mobile = window.matchMedia?.('(max-width:760px)').matches;
+  if (mobile && mobileFocus) {
+    $('appLayout').classList.add('mobile-map');
+    $('mapTab').classList.toggle('active', view === 'map');
+    $('listTab').classList.toggle('active', view === 'list');
+    $('mapTab').setAttribute('aria-pressed', String(view === 'map'));
+    $('listTab').setAttribute('aria-pressed', String(view === 'list'));
+    if (view === 'list') mobileFocus.openList(false);
+    else mobileFocus.enterBrowse();
+    requestAnimationFrame(() => map?.resize());
+    syncAds();
+    return;
+  }
   $('appLayout').classList.toggle('mobile-map', view === 'map');
   $('mapTab').classList.toggle('active', view === 'map'); $('listTab').classList.toggle('active', view !== 'map');
   $('mapTab').setAttribute('aria-pressed', String(view === 'map')); $('listTab').setAttribute('aria-pressed', String(view !== 'map'));
@@ -780,6 +830,7 @@ function setMobileView(view) {
 async function initializeMap() {
   try {
     map = await createMap({ container: $('map'), config, onSelect: id => selectStation(String(id), { origin: 'map' }), onBoundsChange: mapBoundsChanged, onBackgroundClick: () => { if ($('stationDialog').open) closeDetails(); }, onError: error => { if (error?.recoverable) return; $('mapMessage').textContent = error?.message || '지도를 불러오지 못했습니다. 충전소 목록을 이용해 주세요.'; $('mapMessage').hidden = false; } });
+    mobileFocus?.syncMapCapabilities();
     const selected = currentStation();
     if (selected && !preserveSelectedView && hasCoordinates(selected)) map.focus(selected, { zoom: 16 });
     else if (sharedView) map.setCenter(sharedView.center, sharedView.zoom);
@@ -930,5 +981,5 @@ function startPolling() {
 }
 startPolling();
 welcomeAd.start();
-window.addEventListener('pagehide', event => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); cancelAnimationFrame(selectedListFrame); if(event.persisted)listScrollSelection?.suppress();else {listScrollSelection?.destroy();bottomAd.destroy();adManager.destroy();} });
+window.addEventListener('pagehide', event => { clearInterval(refreshTimer); clearTimeout(boundsTimer); clearTimeout(inputTimer); cancelAnimationFrame(selectedListFrame); if(event.persisted)listScrollSelection?.suppress();else {listScrollSelection?.destroy();mobileFocus?.destroy();bottomAd.destroy();adManager.destroy();} });
 window.addEventListener('pageshow', event => { if (event.persisted) { startPolling(); if (!demo) refresh(); } });
