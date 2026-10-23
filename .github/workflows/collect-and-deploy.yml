@@ -229,3 +229,15 @@ jobs:
           name: evchargingstation-marker-verification
           path: verification/markers
           retention-days: 7
+      - name: Verify mobile map focus mode
+        if: github.event_name != 'schedule'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.page_url }}
+        run: node scripts/verify-map-focus-browser.mjs
+      - name: Keep map focus screenshots and results
+        if: always() && github.event_name != 'schedule'
+        uses: actions/upload-artifact@v5.0.0
+        with:
+          name: evchargingstation-map-focus-verification
+          path: verification/map-focus
+          retention-days: 7
