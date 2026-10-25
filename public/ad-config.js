@@ -3,16 +3,16 @@
  * Welcome is an optional service introduction; actual popup ads remain disabled.
  */
 window.EV_AD_CONFIG = Object.freeze({
-  enabled: false,
-  mode: 'off',
+  enabled: true,
+  mode: 'adfit',
   script: 'https://t1.kakaocdn.net/kas/static/ba.min.js',
   placements: {
-    listInline: {enabled:true,positions:[6,18,30],maxSlots:3},
-    bottomAnchor: {enabled:true,mobileDefaultExpanded:false,desktopDefaultExpanded:true},
+    listInline: {enabled:true,positions:[6],maxSlots:1},
+    bottomAnchor: {enabled:true,mobileDefaultExpanded:true,desktopDefaultExpanded:true},
     welcome: {enabled:false,adfitApproved:false,oncePerSession:true}
   },
   units: {
-    list1:{unit:'',width:320,height:100}, list2:{unit:'',width:320,height:100}, list3:{unit:'',width:320,height:100},
-    bottomDesktop:{unit:'',width:728,height:90}, bottomMobile:{unit:'',width:320,height:100}, welcome:{unit:'',width:320,height:100}
+    list1:{unit:'DAN-fNOUP1ElmgvvBj6u',width:300,height:250}, list2:{unit:'',width:320,height:100}, list3:{unit:'',width:320,height:100},
+    bottomDesktop:{unit:'DAN-BSuQNTdisNzt5FNQ',width:728,height:90}, bottomMobile:{unit:'DAN-GARaUEV62FfEDUGr',width:320,height:100}, welcome:{unit:'',width:320,height:100}
   }
 });
