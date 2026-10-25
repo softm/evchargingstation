@@ -76,11 +76,10 @@ test('rendered iframe cancels the watchdog without asserting a paid impression; 
  assert.equal(list.hosts[1].dataset.adState,'no-ad');assert.equal(list.hosts[0].hidden,false);assert.equal(a.removed,undefined);
 });
 
-test('bottom is manual-only for real ads, session choice persists, reading/detail collapse is temporary and does not re-request',()=>{
+test('bottom opens and requests once on first load, session choice persists, reading/detail collapse is temporary and does not re-request',()=>{
  const f=adFixture(),m=manager(f),bottom=mountBottomAd({host:f.bottom,manager:m,win:f.win,doc:f.doc});
- assert.equal(f.panel.hidden,true);f.visibleAll();assert.equal(m.requestCount,0);
- f.toggle.emit('click');f.visibleAll();assert.equal(m.requestCount,1);assert.equal(f.storage.get(BOTTOM_STORAGE_KEY),'true');
- bottom.setReading(true);assert.equal(f.panel.hidden,true);assert.equal(f.storage.get(BOTTOM_STORAGE_KEY),'true');
+ assert.equal(f.panel.hidden,false);f.visibleAll();assert.equal(m.requestCount,1);assert.equal(f.storage.has(BOTTOM_STORAGE_KEY),false);
+ bottom.setReading(true);assert.equal(f.panel.hidden,true);assert.equal(f.storage.has(BOTTOM_STORAGE_KEY),false);
  bottom.setContext({isList:false,detailOpen:false});assert.equal(f.panel.hidden,false);f.visibleAll();assert.equal(m.requestCount,1);
  bottom.setExpanded(false);bottom.setExpanded(true);f.visibleAll();assert.equal(m.requestCount,1);
  f.resize(390);assert.equal(f.bottom.hidden,true);assert.equal(m.requestCount,1,'resize cannot request another real unit');
@@ -111,7 +110,7 @@ test('preview remains network-free across desktop/mobile resizing and storage fa
  const bottom=mountBottomAd({host:f.bottom,manager:m,win:f.win,doc:f.doc});assert.equal(f.panel.hidden,false);
  f.resize(390);bottom.setExpanded(true);assert.equal(f.panel.style.getPropertyValue('--ad-width'),'320px');
  assert.equal(f.networkScripts().length,0);assert.equal(f.bottom.hidden,false);
- assert.equal(bottomExpanded({stored:null,mobile:true,config:m.config.placements.bottomAnchor,preview:true}),false);
+ assert.equal(bottomExpanded({stored:null,mobile:true,config:m.config.placements.bottomAnchor}),true);
 });
 
 test('welcome UI is optional/session-scoped, closes immediately, restores focus and never calls AdFit even with approval flags',()=>{
