@@ -1,16 +1,16 @@
 import {validAdUnit,validAdSize} from './ads.js';
-export const BOTTOM_STORAGE_KEY='evchargingstation:ad-bottom:expanded:v1';
-export function bottomExpanded({stored,mobile,config,preview}) {
+// v2 resets the former manual-only/collapsed default once after deployment.
+export const BOTTOM_STORAGE_KEY='evchargingstation:ad-bottom:expanded:v2';
+export function bottomExpanded({stored,mobile,config}) {
   const preferred=stored===null ? mobile ? config.mobileDefaultExpanded : config.desktopDefaultExpanded : stored==='true';
-  // A first-time real banner is manual-only even if desktop preview defaults open.
-  return Boolean(preferred && (preview || stored==='true'));
+  return Boolean(preferred);
 }
 export function mountBottomAd({host,manager,win=window,doc=document,onSpaceChange=()=>{}}) {
   const config=manager.config.placements.bottomAnchor,button=host.querySelector('button'),panel=host.querySelector('.ad-bottom-panel');
   const key=BOTTOM_STORAGE_KEY+(manager.preview?':preview':'');
   let stored=null;try{stored=win.sessionStorage.getItem(key);}catch{}
   const desktop=win.matchMedia('(min-width:761px)');
-  let expanded=bottomExpanded({stored,mobile:!desktop.matches,config,preview:manager.preview}),reading=false,readingExpanded=false,detailOpen=false,isList=true,chosen=null,controller=null,space='';
+  let expanded=bottomExpanded({stored,mobile:!desktop.matches,config}),reading=false,readingExpanded=false,detailOpen=false,isList=true,chosen=null,controller=null,space='';
   function choose() {return desktop.matches?'bottomDesktop':'bottomMobile';}
   function available(name) {const unit=manager.config.units[name];return config.enabled&&(manager.preview||manager.enabled&&validAdUnit(unit.unit)&&validAdSize(unit,name));}
   function syncSpace() {

@@ -17,7 +17,7 @@ export function normalizeAdConfig(value = {}) {
   const positions = [...new Set((value.placements?.listInline?.positions || [6,18,30]).filter(n=>Number.isInteger(n)&&n>=6&&n<=200))].sort((a,b)=>a-b).slice(0,3);
   return {enabled:legacy ? value.enabled !== false : value.enabled === true,mode:legacy ? 'adfit' : ['off','preview','adfit'].includes(value.mode) ? value.mode : 'off',script:ADFIT_SCRIPT,
     placements:{listInline:{enabled:true,positions,maxSlots:3,...value.placements?.listInline,positions},
-      bottomAnchor:{enabled:true,mobileDefaultExpanded:false,desktopDefaultExpanded:true,...value.placements?.bottomAnchor},
+      bottomAnchor:{enabled:true,mobileDefaultExpanded:true,desktopDefaultExpanded:true,...value.placements?.bottomAnchor},
       welcome:{enabled:false,adfitApproved:false,oncePerSession:true,...value.placements?.welcome}},units};
 }
 export function createAdManager({config = {},preview = false,demo = false,win = window,doc = document,location = win.location} = {}) {
