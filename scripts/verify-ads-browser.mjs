@@ -25,12 +25,11 @@ try {
     await page.waitForFunction(()=>document.querySelector('#appLayout')?.dataset.mapFocusState==='list-sheet');
    }
    assert.equal(await page.locator('.station-card').count(),60);
-   assert.equal(await page.locator('.adfit-banner[data-after-station]').count(),3);
+   assert.equal(await page.locator('.adfit-banner[data-after-station]').count(),1);
    const placement=await page.locator('.adfit-banner[data-after-station]').evaluateAll(slots=>slots.map(s=>({position:Number(s.dataset.afterStation),width:s.getBoundingClientRect().width,hidden:s.hidden})));
-   assert.deepEqual(placement.map(s=>s.position),[6,18,30]);
-   if(viewport.width>320)assert.equal(placement.filter(s=>!s.hidden).length,3);
+   assert.deepEqual(placement.map(s=>s.position),[6]);
+   if(viewport.width>320)assert.equal(placement.filter(s=>!s.hidden).length,1);
    assert.ok(placement.every(s=>s.hidden||s.width>=320),'never crop a creative on narrow screens');
-   if(viewport.width<761){assert.equal(await page.locator('#bottomAdPanel').isVisible(),false);await page.getByRole('button',{name:'광고 펼치기',exact:true}).click();}
    assert.equal(await page.locator('#bottomAdPanel').isVisible(),true);
    const geometry=await page.evaluate(mobile=>{
     const ad=document.querySelector('#bottomAd').getBoundingClientRect();
@@ -67,16 +66,15 @@ try {
    const search=page.getByRole('searchbox');await search.fill('__no_matching_charging_station__');
    await page.waitForFunction(()=>document.querySelector('#resultCount')?.textContent==='0');
    assert.equal(await page.locator('.adfit-banner[data-after-station]:visible').count(),0);
-   // New non-preview session: no unit configured means no SDK/script/ins or ad space.
-   await page.goto(`${base}?region=11&sort=name`,{waitUntil:'domcontentloaded'});await page.locator('.station-card').first().waitFor({state:'attached',timeout:90000});
-   assert.equal(await page.locator('ins.kakao_ad_area').count(),0);assert.equal(await page.locator('#bottomAd').isVisible(),false);
+   // Continue in preview so deployment verification never creates real impressions.
+   await search.fill('');await page.waitForFunction(()=>Number(document.querySelector('#resultCount')?.textContent)>0);
    if(viewport.width<761){
     await page.locator('[data-focus-action="list"]').click();
     await page.waitForFunction(()=>document.querySelector('#appLayout')?.dataset.mapFocusState==='list-sheet');
    }
    await page.getByRole('button',{name:/충전소 더 보기/}).click();
    await page.waitForFunction(()=>document.querySelectorAll('.station-card').length===120);
-   assert.equal(await page.locator('.adfit-banner[data-after-station]').count(),3,'more results keep the same three placements');
+   assert.equal(await page.locator('.adfit-banner[data-after-station]').count(),1,'more results keep the same issued placement');
    if(viewport.width<761){
     await page.locator('.list-sheet-close').click();
     await page.waitForFunction(()=>document.querySelector('#appLayout')?.dataset.mapFocusState==='map-browse');
@@ -88,7 +86,7 @@ try {
    await page.mouse.move(mapBox.x+mapBox.width*0.6+40,mapBox.y+mapBox.height*0.6+25,{steps:8});await page.mouse.up();
    await page.waitForFunction(()=>document.querySelector('#regionSelect').value==='auto');
    assert.equal(adRequests.length,0);assert.deepEqual(errors,[]);
-   results.push({viewport,pass:true,adRequests:0,checks:['6/18/30 slots','bottom reserve/collapse/session','welcome Escape/session','scroll selection and marker','marker click and detail','mobile map/list','empty results','more results','map zoom and drag','unconfigured zero SDK']});
+   results.push({viewport,pass:true,adRequests:0,checks:['6th-card slot','bottom default-open/reserve/collapse/session','welcome Escape/session','scroll selection and marker','marker click and detail','mobile map/list','empty results','more results','map zoom and drag','preview zero SDK']});
   } catch(error){await page.screenshot({path:resolve(out,`failure-${name}.png`)}).catch(()=>{});throw error;}
   finally{await context.close();}
  }
