@@ -14,7 +14,7 @@
 
 **2026-10-21 상세 정보 개선:** 상태 4종 요약, 충전기별 커넥터·출력·위치·회원/비회원 요금, 용어 설명과 공공 기준요금표를 추가했습니다. 연결되지 않은 가격은 미확인으로 표시합니다. [상세 정보의 출처와 적용 범위](docs/DETAIL_INFORMATION.md)를 참고하세요.
 
-**AdFit 배너:** 목록 6개 뒤의 320 × 100 배너와 비동기 로딩을 구현했습니다. 실제 광고단위 ID는 미설정이며 현재 광고 요청은 발생하지 않습니다. [연결 방법과 검증 범위](docs/ADFIT.md)를 참고하세요.
+**AdFit 배너:** 목록 6개 뒤의 300 × 250 배너와 하단 PC 728 × 90·모바일 320 × 100 접이식 배너를 충전한눈 전용 광고단위로 연결했습니다. 하단 광고는 첫 로드에 펼쳐지며 실제 화면 접근 시 한 번만 지연 요청하고, NO-AD·오류·폭 부족 시 공간을 반환합니다. [운영 방법과 검증 범위](docs/ADS.md)를 참고하세요.
 
 | 영역 | 동작 |
 | --- | --- |
@@ -73,7 +73,7 @@ python3 -m server --host 127.0.0.1 --port 8000
 | `PUBLIC_NAVER_MAP_CLIENT_ID` | Variable | 기존 지도 공개 Application Key ID 사용. 다른 앱 ID로 교체 가능 |
 | `PUBLIC_EV_API_BASE_URL` | Variable | 비우면 정적 snapshot. 운영 API가 있으면 HTTPS 주소 |
 | `PUBLIC_EV_DATA_BASE_URL` | Variable | 기본 `./data` |
-| `PUBLIC_ADFIT_BANNER_UNIT` | Variable | 충전한눈 등록 매체의 320 × 100 AdFit 단위 ID. 미설정 시 광고 요청·빈 슬롯 없음 |
+| `PUBLIC_ADFIT_BANNER_UNIT` | Variable | 기존 목록 1 단위 호환 별칭. 신규 설정은 지면별 `PUBLIC_ADFIT_*_UNIT` 변수를 사용 |
 | `PAUSE_EV_COLLECTION` | Variable | 기본 예약 수집 활성. `true`일 때 중지 |
 | `CHARGEINFO_REUSE_APPROVED` | Variable | 기본 요금표 외부 수집 비활성. 허가·계약 확보 후 `true`로 허용 |
 | `MAX_API_CALLS_PER_RUN` | Variable | 기본 100, 페이지·재시도 포함 |
