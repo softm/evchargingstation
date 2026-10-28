@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { compressRegionFiles } from './compress-data.mjs';
 import { buildSearchIndex } from './build-search-index.mjs';
 import { versionAssets } from './version-assets.mjs';
-import { buildAdConfig } from './ad-config.mjs';
+import { buildAdConfig, normalizeMigratedAdEnvironment } from './ad-config.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, 'dist');
@@ -29,7 +29,9 @@ for (const key of ['apiBaseUrl', 'dataBaseUrl','statusApiBaseUrl']) {
 }
 await writeFile(path.join(output, 'config.js'), `/* Public settings only. */\nwindow.EV_CONFIG = Object.freeze(${JSON.stringify(config, null, 2)});\n`);
 vm.runInNewContext(await readFile(path.join(root, 'public/ad-config.js'), 'utf8'), context);
-const adConfig = buildAdConfig(context.window.EV_AD_CONFIG,process.env);
+const {env:adEnvironment,migrated}=normalizeMigratedAdEnvironment(context.window.EV_AD_CONFIG,process.env);
+if(migrated)console.warn('Ignored the stale mobile AdFit override after its documented move to list3. No mobile unit is reused or invented.');
+const adConfig = buildAdConfig(context.window.EV_AD_CONFIG,adEnvironment);
 await writeFile(path.join(output, 'ad-config.js'), `/* Public AdFit configuration. */\nwindow.EV_AD_CONFIG = Object.freeze(${JSON.stringify(adConfig, null, 2)});\n`);
 console.log(`AdFit: ${adConfig.enabled ? Object.values(adConfig.units).filter(slot=>slot.unit).length : 0} configured units; actual serving is not verified by a build. Welcome popup ad requests remain disabled.`);
 const manifest = JSON.parse(await readFile(path.join(output, 'data/manifest.json'), 'utf8'));
