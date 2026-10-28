@@ -18,3 +18,16 @@ export function buildAdConfig(source,env = {}) {
   config.unit=config.units.list1.unit;
   return config;
 }
+
+
+// The 2026-10-25 layout moved the old mobile unit into list3.
+// Ignore only that stale override when source intentionally leaves mobile unconfigured.
+export function normalizeMigratedAdEnvironment(source,env={}) {
+  const result={...env};
+  const legacy=String(env.PUBLIC_ADFIT_BOTTOM_MOBILE_UNIT||'').trim();
+  const list3=source?.units?.list3?.unit;
+  const currentList3=String(env.PUBLIC_ADFIT_LIST_3_UNIT||list3||'').trim();
+  const migrated=Boolean(legacy && source?.units?.bottomMobile?.unit==='' && legacy===list3 && currentList3===list3);
+  if(migrated)delete result.PUBLIC_ADFIT_BOTTOM_MOBILE_UNIT;
+  return {env:result,migrated};
+}
