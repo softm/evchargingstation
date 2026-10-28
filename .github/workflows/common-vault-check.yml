@@ -14,9 +14,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Existing application regression checks
         run: |
+          npm ci --prefix services/status-api --ignore-scripts --no-audit --no-fund
           npm run check
           npm test
           npm run build
