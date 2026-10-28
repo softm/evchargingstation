@@ -1,0 +1,23 @@
+name: Verify common vault integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths: ['public/index.html','docs/COMMON-VAULT.md','.github/workflows/common-vault-check.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Existing application regression checks
+        run: |
+          npm ci --prefix services/status-api --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm test
+          npm run build
