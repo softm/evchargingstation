@@ -204,15 +204,9 @@ function mapBoundsChanged(bounds, { source = 'user' } = {}) {
   mapSearchPending = true;
   updateMapSearchButton();
   clearTimeout(boundsTimer);
-  // The adapter waits 350 ms after the final pan/zoom event. Coalesce any
-  // remaining layout events before applying the latest viewport automatically.
-  boundsTimer = setTimeout(() => {
-    void searchCurrentMap().catch(error => {
-      state.partialError = error.message || '지도 주변 정보를 불러오지 못했습니다.';
-      state.loading = false;
-      render();
-    });
-  }, 100);
+  // Keep the explicit viewport-search action visible until the user chooses it.
+  // This prevents a pan from immediately replacing the current results and
+  // avoids the button flashing briefly before an automatic refresh hides it.
 }
 
 function readFavorites() {
