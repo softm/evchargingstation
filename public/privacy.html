@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="./css/data-status.css">
 </head>
 <body>
-<section aria-labelledby="common-vault-privacy" style="margin:20px 0;padding:16px;border:1px solid #94b7a0;border-radius:12px"><h2 id="common-vault-privacy">선택 공통 계정·암호화 보관소</h2><p>이하 기기 전용 저장 설명은 공통 보관소를 사용하지 않는 기본 이용에 적용됩니다. 내 보관소에서 SNS 로그인 후 저장을 누르거나 현재 창의 자동 저장을 켜면 관심 충전소와 개인 메모를 기기에서 암호화해 사이트별 Firestore 보관소에 저장합니다. 암호는 서버에 보내거나 기기에 보관하지 않습니다. 최근 저장본 5개를 유지하며 원격 저장본 삭제와 로그아웃을 제공합니다. 기존 별도 계정 기록은 자동 병합하지 않습니다. <a href="https://softm.github.io/account/privacy.html" target="_blank" rel="noopener noreferrer">공통 계정 개인정보 안내</a></p></section>
+<section aria-labelledby="common-account-privacy" style="margin:20px 0;padding:16px;border:1px solid #94b7a0;border-radius:12px"><h2 id="common-account-privacy">선택형 Cloudflare 공통 계정 로그인</h2><p>충전소 검색은 로그인 없이 이용할 수 있습니다. 선택적으로 Google·카카오·네이버 계정으로 로그인할 수 있으며, 회원 식별자·SNS 연결 정보·동의 기록과 인증 세션은 Cloudflare Worker 및 D1에서 처리합니다. 관심 충전소와 화면 설정은 현재 기기에만 남고 로그인만으로 업로드·복원·기기 간 동기화되지 않습니다. 이전 Firebase 보관소 자료도 새 계정으로 자동 이관되지 않습니다. <a href="https://softm-hannun-account.softm.workers.dev/account" target="_blank" rel="noopener noreferrer">Cloudflare 공통 계정 관리</a></p></section>
 
   <header>
     <a class="brand" href="./"><img src="./icon-192.png?v=20261030" alt="" width="32" height="32">충전한눈</a>
@@ -54,7 +54,7 @@
 
     <section class="panel">
       <h2>6. 데이터 보관 및 삭제</h2>
-      <p>충전한눈이 자체적으로 운영하는 사용자 계정 기능은 현재 제공하지 않습니다. 기기 내 로컬 저장정보는 사용자가 앱 데이터 또는 사이트 데이터를 삭제하면 제거할 수 있습니다.</p>
+      <p>공통 계정 로그아웃·연결 관리는 계정 관리 화면에서 할 수 있습니다. 충전한눈의 기기 내 로컬 저장정보는 사용자가 앱 데이터 또는 사이트 데이터를 삭제하면 제거되며, 계정 로그아웃만으로 함께 삭제되지는 않습니다.</p>
     </section>
 
     <section class="panel">
