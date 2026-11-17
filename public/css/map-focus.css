@@ -55,12 +55,34 @@
   }
   body.map-focus-enabled .results.is-dragging{transition:none!important}
   body.map-focus-enabled .list-sheet-grip{
-    display:flex;position:relative;align-items:center;justify-content:center;min-height:28px;flex:none;
-    border-bottom:1px solid #edf1ef;background:#fff
+    display:block;position:relative;min-height:72px;flex:none;background:#fff;
+    border-radius:22px 22px 0 0
   }
-  .list-sheet-close{
-    position:absolute;right:8px;top:2px;width:42px;height:42px;border-radius:50%;
-    color:#536a5e;font-size:25px;line-height:1
+  body.map-focus-enabled .list-sheet-grip .focus-sheet-handle{
+    position:absolute;left:50%;top:0;z-index:2;width:150px;height:30px;min-height:30px;
+    transform:translateX(-50%);background:transparent;border-radius:22px 22px 0 0
+  }
+  body.map-focus-enabled .list-sheet-grip .focus-sheet-handle>span{
+    width:58px;height:5px;background:#82968d;box-shadow:0 1px 3px #17362e28
+  }
+  body.map-focus-enabled .list-sheet-caption{
+    display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;
+    height:64px;margin-top:8px;padding:18px 14px 4px;border-bottom:1px solid #edf1ef
+  }
+  body.map-focus-enabled .list-sheet-caption strong{
+    color:#254c42;text-align:center;font-size:17px;line-height:1.3;letter-spacing:-.4px
+  }
+  body.map-focus-enabled .list-sheet-back{
+    display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;
+    border-radius:50%;background:#f2f6f4;color:#174f43
+  }
+  body.map-focus-enabled .list-sheet-back svg{
+    width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round
+  }
+  body.map-focus-enabled .list-sheet-caption-spacer{display:block;width:44px;height:44px}
+  body.map-focus-enabled .list-sheet-back:hover{background:#e5efeb}
+  body.map-focus-enabled .list-sheet-back:focus-visible{
+    outline:3px solid #6ebda7;outline-offset:2px
   }
 
   body.map-focus-enabled [data-map-focus-state="focus-detail"] .search-panel,
