@@ -91,7 +91,15 @@ export function createMobileMapFocus({
 
   const listHandle = document.createElement('div');
   listHandle.className = 'list-sheet-grip';
-  listHandle.innerHTML = '<button type="button" class="focus-sheet-handle" aria-label="목록 패널 크기 조절"><span></span></button><button type="button" class="list-sheet-close" aria-label="목록 닫기">×</button>';
+  listHandle.innerHTML = `
+    <button type="button" class="focus-sheet-handle" aria-label="목록 높이 조절, 아래로 끌면 닫기"><span></span></button>
+    <div class="list-sheet-caption">
+      <button type="button" class="list-sheet-back" aria-label="지도로 돌아가기">
+        ${mapIcon('M15 18l-6-6 6-6')}
+      </button>
+      <strong>충전소 목록</strong>
+      <span class="list-sheet-caption-spacer" aria-hidden="true"></span>
+    </div>`;
   results.prepend(listHandle);
 
   function isActive() {
@@ -313,7 +321,7 @@ export function createMobileMapFocus({
   advanced.addEventListener('click', handleAction);
   dock.addEventListener('click', handleAction);
   expandFab.addEventListener('click', handleAction);
-  listHandle.querySelector('.list-sheet-close').addEventListener('click', () => closeList());
+  listHandle.querySelector('.list-sheet-back').addEventListener('click', () => closeList());
   bindHandle(listHandle.querySelector('.focus-sheet-handle'), results, 'list');
 
   const observer = new MutationObserver(updateCounts);
